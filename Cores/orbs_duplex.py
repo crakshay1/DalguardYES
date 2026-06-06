@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 """
-asd_duplex.py
+orbs_duplex.py
 
 Scan an input RNA transcript for the strongest self-complementary o-RBS
 candidate, print the scan results, and write the best merged hit and core hit
-to a single FASTA file as <gene>_rbs_core.fa.
+to a standardized JSON file as <gene>_rbs_core.json.
 """
 
 from __future__ import annotations
+from datetime import datetime
 
 from dataclasses import dataclass
 import argparse
+import json
 from pathlib import Path
 import re
 
@@ -20,7 +22,7 @@ DEFAULT_TEMP = 37.0
 DEFAULT_WINDOW_K = 4
 DEFAULT_ASD_TAIL_NT = 12
 DG_TOL = 1e-6
-
+DEFAULT_NAME = datetime.now().strftime("query_%Y%m%d_%H%M%S")
 
 def normalize_rna(seq: str) -> str:
     return seq.upper().replace("T", "U")
@@ -159,23 +161,33 @@ def merge_top_hits(hits: list[WindowHit], source_seq: str, source_start: int, te
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Identify and export the best o-RBS candidate as FASTA.")
+    parser = argparse.ArgumentParser(description="Identify and export the best o-RBS candidate as JSON.")
     source = parser.add_mutually_exclusive_group(required=True)
-    source.add_argument("--fasta", help="Input transcript FASTA file.")
-    source.add_argument("--sequence", help="Input transcript RNA/DNA sequence.")
-    parser.add_argument("--name", help="Gene name used for FASTA output when --sequence is provided.")
+    #fixed/unused arguments (to be removed/replaced in future edits)
     parser.add_argument("--asd-start", type=int, help="1-based start of the ASD search region.")
     parser.add_argument("--asd-end", type=int, help="1-based end of the ASD search region.")
+    parser.add_argument("--output-dir", default=".", help="Directory where the <gene>_rbs_core.json file is written.")
+    source.add_argument("--fasta", help="Input transcript FASTA file.")
+
+    #customizable arguments (with defaults)
     parser.add_argument("--asd-tail-nt", type=int, default=DEFAULT_ASD_TAIL_NT)
     parser.add_argument("--window-k", type=int, default=DEFAULT_WINDOW_K)
     parser.add_argument("--temp", type=float, default=DEFAULT_TEMP)
-    parser.add_argument("--output-dir", default=".", help="Directory where the <gene>_rbs_core.fa file is written.")
+    parser.add_argument("--name", default=DEFAULT_NAME, help="Gene name used for FASTA output when --sequence is provided.")
+    source.add_argument("--sequence", default="AUAUGUUCACUA", help="Input transcript RNA/DNA sequence.")
+
+    #customizable arguments (required)
+    parser.add_argument("--mrna5", required=True, help="mRNA fragment upstream of the RBS; FASTA path or raw sequence.")
+    parser.add_argument("--mrna3", required=True, help="mRNA fragment downstream of the RBS; FASTA path or raw sequence.")
     return parser
 
 
 def main() -> None:
     args = build_parser().parse_args()
     full_seq, inferred_name = resolve_input_sequence(args.sequence, args.fasta)
+
+    mrna5 = normalize_rna(args.mrna5)
+    mrna3 = normalize_rna(args.mrna3)   
 
     if args.sequence and not args.name:
         raise SystemExit("--name is required when --sequence is used.")
@@ -205,16 +217,21 @@ def main() -> None:
     if merged:
         output_dir = Path(args.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        output_path = output_dir / f"{gene_name}_rbs_core.fa"
+        output_path = output_dir / f"{gene_name}_rbs_core.json"
         best = merged[0]
         core = hits[0]
-        write_fasta_records(
-            output_path,
-            [
-                (f"o-rbs {gene_name}", revcomp_rna(full_seq)),
-                (f"core {gene_name}", core.subseq),
-            ],
-        )
+        candidate = {
+            "name": gene_name,
+            "five_prime_flank": mrna5,
+            "rbs": revcomp_rna(full_seq),
+            "core": revcomp_rna(core.subseq),
+            "spacer": "",
+            "cds_start": mrna3,
+            "mutable_regions": ["rbs", "five_prime_flank", "spacer"],
+        }
+        with output_path.open("w") as fh:
+            json.dump([candidate], fh, indent=4)
+            fh.write("\n")
         print(f"WROTE {output_path}")
     else:
         print("No merged o-RBS candidate found; no FASTA file written.")
