@@ -1,0 +1,15 @@
+[
+    {
+        "name": "query_20260606_184002",
+        "five_prime_flank": "AAAAACAAAAA",
+        "rbs": "UAGUGAACAUAU",
+        "core": "GUGA",
+        "spacer": "",
+        "cds_start": "UUUUUUGUUUUUU",
+        "mutable_regions": [
+            "rbs",
+            "five_prime_flank",
+            "spacer"
+        ]
+    }
+]
