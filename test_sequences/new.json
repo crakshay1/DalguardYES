@@ -1,1 +1,452 @@
-[]
+[
+  {
+    "name": "query_20260606_201310_c0001",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "GGGG",
+    "rbs": "UCAGACCUGGUUCCAACAAG",
+    "core": "CCUG",
+    "spacer": "GCGA",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0002",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "AGUG",
+    "rbs": "UGCGCCUGUCCAGGCC",
+    "core": "CCUG",
+    "spacer": "CCCA",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0003",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "GGAG",
+    "rbs": "GCGUUCCCUGGCCGAU",
+    "core": "CCUG",
+    "spacer": "GGUCGCU",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0004",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "GGGG",
+    "rbs": "ACACCCCUGGCAGUACC",
+    "core": "CCUG",
+    "spacer": "GCGC",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0005",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "GAUU",
+    "rbs": "UUAGCCUAUCCUGCAAAGAGC",
+    "core": "CCUG",
+    "spacer": "UUUAC",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0006",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "UGGU",
+    "rbs": "AGGUCCUGUUACGUU",
+    "core": "CCUG",
+    "spacer": "UACGCAG",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0007",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "AAAC",
+    "rbs": "AAGACCCUGCGCAACCAGU",
+    "core": "CCUG",
+    "spacer": "ACCCU",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0008",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "GAGG",
+    "rbs": "AGUACCUGUAUCGAU",
+    "core": "CCUG",
+    "spacer": "CGGU",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0009",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "AUGG",
+    "rbs": "UGCAUACCUGUAUAUUUU",
+    "core": "CCUG",
+    "spacer": "GGCGU",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0010",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "GUAC",
+    "rbs": "GAACUGCCUGGAAGCCGA",
+    "core": "CCUG",
+    "spacer": "GGAA",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0011",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "GGCG",
+    "rbs": "AGCGUCCUGCUUAUUUUU",
+    "core": "CCUG",
+    "spacer": "UCAC",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0012",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "AAGG",
+    "rbs": "AAGUAUUCCUGCCACGAACG",
+    "core": "CCUG",
+    "spacer": "CAGGUA",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0013",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "GGGG",
+    "rbs": "ACCAUCCUGCUUAUUGCCU",
+    "core": "CCUG",
+    "spacer": "UAUUCCA",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0014",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "GGCC",
+    "rbs": "ACACCUGGACAA",
+    "core": "CCUG",
+    "spacer": "AGCCU",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0015",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "GGUG",
+    "rbs": "CGUCGCCUGUUCACAC",
+    "core": "CCUG",
+    "spacer": "GUGG",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0016",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "GGGA",
+    "rbs": "GGGACUUCCUGGGCUUAUGU",
+    "core": "CCUG",
+    "spacer": "CAAUUC",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0017",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "GGGA",
+    "rbs": "GGAUCCUGCGGC",
+    "core": "CCUG",
+    "spacer": "AUAC",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0018",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "GCUC",
+    "rbs": "UCCCUCCUGGCGUCU",
+    "core": "CCUG",
+    "spacer": "CUGUCGC",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0019",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "UCCA",
+    "rbs": "GUGCCUGUACAUCUCG",
+    "core": "CCUG",
+    "spacer": "UUCCC",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0020",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "GCUG",
+    "rbs": "AGCCCUGGGAAGGGCGU",
+    "core": "CCUG",
+    "spacer": "CCCGA",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0021",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "GGCA",
+    "rbs": "CGGAGAGCCUGGUAUUC",
+    "core": "CCUG",
+    "spacer": "UGCGCGC",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0022",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "CGAU",
+    "rbs": "AGUGGCCCUGGAGUUUU",
+    "core": "CCUG",
+    "spacer": "CUGGAC",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0023",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "GGGA",
+    "rbs": "GAGAUUCCUGUUGGAAC",
+    "core": "CCUG",
+    "spacer": "UUUUA",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0024",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "GGUU",
+    "rbs": "UCACCUGCGUGCGAGUUU",
+    "core": "CCUG",
+    "spacer": "CCUCC",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0025",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "GGGC",
+    "rbs": "UACAGCCUGGUUGUUA",
+    "core": "CCUG",
+    "spacer": "UGGCG",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0026",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "GUCG",
+    "rbs": "CGUGGUCCUGGGUGCGGAC",
+    "core": "CCUG",
+    "spacer": "CCCAU",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0027",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "GGGC",
+    "rbs": "GCGACCUGUACUAUACAGC",
+    "core": "CCUG",
+    "spacer": "AUUG",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0028",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "CGGA",
+    "rbs": "GUCCCAGCCUGCCUUGU",
+    "core": "CCUG",
+    "spacer": "CUGGUA",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0029",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "ACCG",
+    "rbs": "GCGGUCCUGCUGGUA",
+    "core": "CCUG",
+    "spacer": "UUGCGG",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0030",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "UGGA",
+    "rbs": "GUGCCUGCCUCCGGAC",
+    "core": "CCUG",
+    "spacer": "ACACGAC",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0031",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "GUGG",
+    "rbs": "AGGUGUCCUGCUUCGACA",
+    "core": "CCUG",
+    "spacer": "GUGCA",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0032",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "CGGU",
+    "rbs": "UGAGCAAUCCUGCCUGGGUC",
+    "core": "CCUG",
+    "spacer": "ACCU",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0033",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "AAAU",
+    "rbs": "CCUUGACCUGGAUAUUAUU",
+    "core": "CCUG",
+    "spacer": "AUCAA",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0034",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "GGGA",
+    "rbs": "UUAGAAGCCUGCUUCUCCU",
+    "core": "CCUG",
+    "spacer": "UCAUGGU",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0035",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "AGAC",
+    "rbs": "UCCCAACCUGUUAUGCA",
+    "core": "CCUG",
+    "spacer": "CUCGCG",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0036",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "GCAG",
+    "rbs": "CUGGCCUGGGGAAAAC",
+    "core": "CCUG",
+    "spacer": "GUGUA",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0037",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "UGGC",
+    "rbs": "AAUCUGAGUCCUGGGCCUCCUC",
+    "core": "CCUG",
+    "spacer": "GCCGGA",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0038",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "GGCG",
+    "rbs": "GCGUCUCCUGGGAUCUCUCCAU",
+    "core": "CCUG",
+    "spacer": "UGCUGG",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0039",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "UGGG",
+    "rbs": "AGCAGCCUGGAACUGCA",
+    "core": "CCUG",
+    "spacer": "GUAUAU",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0040",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "GCUA",
+    "rbs": "UCAACCUGGACAGGG",
+    "core": "CCUG",
+    "spacer": "GACA",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0041",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "GGAG",
+    "rbs": "GGAGGCCUGCGAUAU",
+    "core": "CCUG",
+    "spacer": "CUGC",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0042",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "GCGG",
+    "rbs": "CCAUCCUGUUGCCCCA",
+    "core": "CCUG",
+    "spacer": "CCCCGAG",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0043",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "GGGU",
+    "rbs": "CUGACCCUGGCGCCAAAU",
+    "core": "CCUG",
+    "spacer": "CACCGUG",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0044",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "GAGC",
+    "rbs": "UCCAUCCUGCCUUCGGU",
+    "core": "CCUG",
+    "spacer": "UCUC",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0045",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "UGUG",
+    "rbs": "AGAUCCUGUCCACCCG",
+    "core": "CCUG",
+    "spacer": "UUCUA",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0046",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "GGGC",
+    "rbs": "UGAUUCCUGCGGUGGUGCG",
+    "core": "CCUG",
+    "spacer": "CCUUA",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0047",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "AGUA",
+    "rbs": "UCAUCCUGGCUACAA",
+    "core": "CCUG",
+    "spacer": "GUACUG",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0048",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "GGGA",
+    "rbs": "GGCUCCUGUAUGCCUGG",
+    "core": "CCUG",
+    "spacer": "CUACU",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0049",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "CGUU",
+    "rbs": "UGUCCUGUCGUGCACG",
+    "core": "CCUG",
+    "spacer": "UCAGC",
+    "cds_start": "UUUUUUGUUUUUU"
+  },
+  {
+    "name": "query_20260606_201310_c0050",
+    "five_prime_flank": "AAAAACAAAAA",
+    "stand_by": "CGGG",
+    "rbs": "ACACCUGCCUAUGGUCG",
+    "core": "CCUG",
+    "spacer": "CGCC",
+    "cds_start": "UUUUUUGUUUUUU"
+  }
+]
