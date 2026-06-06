@@ -673,7 +673,7 @@ def score_sites_for_asd(
     Returns:
       best_tir, best_dG_total, best_dG_spacing, best_dG_unfolding, site_results
     """
-    sites = scan_binding_sites(utr_seq, anti_sd, aug_start, min_overlap=5, max_sites=12)
+    sites = scan_binding_sites(utr_seq, anti_sd, aug_start, min_overlap=4, max_sites=12)
     if not sites:
         return 0.0, 999.0, float("nan"), float("nan"), []
 
@@ -1234,6 +1234,7 @@ def build_dashboard_dataset(
         ],
         "scatterPoints": [
             {
+                "id": idx,
                 "wtLeakage": max(1e-8, e.wt_tir),
                 "binding": e.orth_tir,
                 "access": e.rbs_access,
@@ -1241,7 +1242,7 @@ def build_dashboard_dataset(
                 "spacer": e.spacer,
                 "fitness": e.fitness,
             }
-            for e in top
+            for idx, e in enumerate(top)
         ],
         "bindingSites": site_payload,
     }
@@ -1278,6 +1279,7 @@ def write_outputs(
     # Landscape CSV, React-style
     landscape_rows = [
         {
+            "id": idx,
             "wtLeakage": max(1e-8, e.wt_tir),
             "binding": e.orth_tir,
             "access": e.rbs_access,
@@ -1285,7 +1287,7 @@ def write_outputs(
             "spacer": e.spacer,
             "fitness": e.fitness,
         }
-        for e in evals
+        for idx, e in enumerate(evals)
     ]
     if landscape_rows:
         with (out / "landscape.csv").open("w", newline="") as f:

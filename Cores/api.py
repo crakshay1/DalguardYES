@@ -105,6 +105,16 @@ def duplex_dg(seq1: str, seq2: str, temp: float = 37.0) -> float:
     RNA.cvar.temperature = temp
     return RNA.duplexfold(seq1.upper().replace("T", "U"), seq2.upper().replace("T", "U")).energy
 
+def sanitize_nan_values(obj: Any) -> Any:
+    if isinstance(obj, dict):
+        return {k: sanitize_nan_values(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [sanitize_nan_values(x) for x in obj]
+    elif isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return None
+    return obj
+
 # Request / Response Schemas
 class OptimizeRequest(BaseModel):
     antiSD: str = Field(..., description="antiSD query sequence / FASTA path")
@@ -197,102 +207,57 @@ async def optimize_rbs(payload: OptimizeRequest):
         orth_asd = revcomp_rna(rbs_full)
         wt_asd = resolve_sequence(payload.wtAntiSD)
 
-        # Perform thermodynamic scoring on candidates
-        candidates_list = []
-        for cand in raw_candidates:
-            rbs_variant = cand["rbs"]
-            spacer = cand["spacer"]
-            cds_start = cand["cds_start"]
-            five_prime_flank = cand["five_prime_flank"]
-            
-            # Calculate hybridization energy with orthogonal anti-SD
-            orth_dg = duplex_dg(rbs_variant, orth_asd, payload.temp)
-            orth_score = round(1.0 / (1.0 + math.exp((orth_dg + 9.5) / 2.0)), 2)
-            
-            # Hybridization with WT anti-SD (leakage)
-            wt_dg = duplex_dg(rbs_variant, wt_asd, payload.temp)
-            wt_leakage = round(1.0 / (1.0 + math.exp((wt_dg + 11.0) / 1.5)), 3)
-            
-            # Accessibility: fold the full candidate sequence to get a complete folding map
-            fold_seq = five_prime_flank + rbs_variant + spacer + cds_start
-            RNA.cvar.temperature = payload.temp
-            structure, mfe = RNA.fold(fold_seq)
-            
-            unpaired_count = structure.count(".")
-            rbs_access = round(unpaired_count / len(structure), 2)
-            
-            candidates_list.append({
-                "rbs": rbs_variant,
-                "spacer": spacer,
-                "five_prime_flank": five_prime_flank,
-                "cds_start": cds_start,
-                "orthScore": f"{orth_score:.2f}",
-                "wtLeakage": f"{wt_leakage:.3f}",
-                "rbsAccess": f"{rbs_access:.2f}",
-                "structure": structure
-            })
-            
-        # Sort candidates primarily by closeness of orthScore to target expression level,
-        # and secondarily by minimizing wild-type leakage (WT leak)
-        target_map = {"High": 0.95, "Medium": 0.60, "Low": 0.20}
-        target_val = target_map.get(payload.targetExpression, 0.95)
-        candidates_list.sort(key=lambda c: (abs(float(c["orthScore"]) - target_val), float(c["wtLeakage"])))
-        
-        # Keep top 15 candidates for display in the dashboard
-        dashboard_candidates = candidates_list[:15]
+        # Run 2ndStruct/riboguard_ga_engine_clean.py
+        cmd_ga = [
+            sys.executable,
+            str(cores_dir.parent / "2ndStruct" / "riboguard_ga_engine_clean.py"),
+            "--seeds", str(candidates_raw_path),
+            "--out", str(output_dir),
+            "--orth-asd", resolved_anti_sd,
+            "--wt-asd", wt_asd,
+            "--flank", resolved_before_rbs,
+            "--cds-start", resolved_after_rbs,
+            "--wt-penalty", "0.35"
+        ]
 
-        # Seed random for reproducibility of scatter points
-        seed_str = orth_asd + resolved_after_rbs
-        random.seed(abs(hash(seed_str)) % (2**32))
-        
-        scatter_points = []
-        for i in range(150):
-            log_val = -4.0 + random.random() * 4.0
-            wt_leak = math.pow(10, log_val)
-            base_binding = 0.85 - ((log_val + 4) / 4) * 0.48
-            noise = (random.random() - 0.5) * 0.28
-            binding = max(0.05, min(0.98, base_binding + noise))
-            access = max(0.02, min(0.99, binding * 0.65 + random.random() * 0.45))
-            scatter_points.append({
-                "id": i,
-                "wtLeakage": wt_leak,
-                "binding": binding,
-                "access": access
-            })
-            
-        for i in range(15):
-            log_val = -4.0 + random.random() * 1.0
-            wt_leak = math.pow(10, log_val)
-            binding = 0.60 + random.random() * 0.28
-            access = 0.75 + random.random() * 0.25
-            scatter_points.append({
-                "id": 1000 + i,
-                "wtLeakage": wt_leak,
-                "binding": binding,
-                "access": access
-            })
+        result_ga = subprocess.run(cmd_ga, capture_output=True, text=True, cwd=str(cores_dir.parent))
+        if result_ga.returncode != 0:
+            raise HTTPException(status_code=500, detail=f"riboguard_ga_engine_clean.py failed: {result_ga.stderr}")
 
-        dashboard_data = {
-            "inputs": {
-                "orthogonalAntiSD": orth_asd,
-                "wtAntiSD": wt_asd,
-                "cdsStart": resolved_after_rbs,
-                "targetExpression": payload.targetExpression
-            },
-            "candidates": dashboard_candidates,
-            "scatterPoints": scatter_points
-        }
+        ga_dataset_path = output_dir / "rbs_dataset.json"
+        if not ga_dataset_path.exists():
+            raise HTTPException(status_code=500, detail="riboguard_ga_engine_clean.py did not produce rbs_dataset.json")
 
-        # Write final candidates evaluation output
+        with open(ga_dataset_path, "r") as fh:
+            dashboard_data = json.load(fh)
+
+        # Overwrite the targetExpression field in inputs using the payload's value
+        if "inputs" in dashboard_data:
+            dashboard_data["inputs"]["targetExpression"] = payload.targetExpression
+
+        # Post-process candidate objects for frontend structure alignment and inspector compatibility
+        if "candidates" in dashboard_data and isinstance(dashboard_data["candidates"], list):
+            for cand in dashboard_data["candidates"]:
+                # Ensure snake_case field equivalents exist
+                if "fivePrimeFlank" in cand:
+                    cand["five_prime_flank"] = cand["fivePrimeFlank"]
+                if "fullSeq" in cand and "utrSeq" in cand:
+                    cand["cds_start"] = cand["fullSeq"][len(cand["utrSeq"]):]
+                    cand["cdsStart"] = cand["cds_start"]
+                else:
+                    cand["cds_start"] = resolved_after_rbs
+                    cand["cdsStart"] = resolved_after_rbs
+
+        # Write final candidates evaluation output (expected by other scripts/tests)
         candidates_output_path = output_dir / "opt_gene_candidates.json"
         with open(candidates_output_path, "w") as fh:
             json.dump(dashboard_data, fh, indent=4)
 
         # 3. Stitched recombinant sequence generation using mrna_stitch.py
-        if dashboard_candidates:
-            top_cand = dashboard_candidates[0]
-            top_rbs = top_cand["rbs"]
-            top_spacer = top_cand["spacer"]
+        if dashboard_data.get("candidates"):
+            top_cand = dashboard_data["candidates"][0]
+            top_rbs = top_cand.get("rbs", "")
+            top_spacer = top_cand.get("spacer", "")
             top_flank = top_cand.get("five_prime_flank", resolved_before_rbs)
             top_cds = top_cand.get("cds_start", resolved_after_rbs)
             
@@ -305,9 +270,9 @@ async def optimize_rbs(payload: OptimizeRequest):
                 "--name", "opt_gene",
                 "--output-dir", str(output_dir)
             ]
-            subprocess.run(cmd_stitch, capture_output=True, text=True)
+            subprocess.run(cmd_stitch, capture_output=True, text=True, cwd=str(cores_dir.parent))
 
-        return dashboard_data
+        return sanitize_nan_values(dashboard_data)
 
     except Exception as e:
         if isinstance(e, HTTPException):

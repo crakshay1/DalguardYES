@@ -133,6 +133,12 @@ interface Candidate {
   structure: string;
 }
 
+interface FitnessPoint {
+  generation: number;
+  best: number;
+  avg: number;
+}
+
 interface ScatterPoint {
   id: number;
   wtLeakage: number;
@@ -166,8 +172,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   const [optProgress, setOptProgress] = useState(0);
 
   // Stateful datasets
-  const [candidates, setCandidates] = useState<Candidate[]>(INITIAL_CANDIDATES);
-  const [scatterPoints, setScatterPoints] = useState<ScatterPoint[]>(INITIAL_SCATTER_POINTS);
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [fitnessData, setFitnessData] = useState<FitnessPoint[]>([]);
+  const [scatterPoints, setScatterPoints] = useState<ScatterPoint[]>([]);
 
   // Parse uploaded file sequence helper
   const handleSingleFileUpload = (
@@ -228,7 +235,15 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         setCandidates(data.candidates);
       }
       if (Array.isArray(data.scatterPoints)) {
-        setScatterPoints(data.scatterPoints);
+        setScatterPoints(
+          data.scatterPoints.map((pt: any, idx: number) => ({
+            ...pt,
+            id: pt.id !== undefined ? pt.id : idx,
+          }))
+        );
+      }
+      if (Array.isArray(data.fitnessData)) {
+        setFitnessData(data.fitnessData);
       }
 
       setSelectedCandidateIndex(0);
@@ -287,8 +302,17 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             setSelectedCandidateIndex(0);
           }
 
+          if (Array.isArray(parsed.fitnessData)) {
+            setFitnessData(parsed.fitnessData);
+          }
+
           if (Array.isArray(parsed.scatterPoints)) {
-            setScatterPoints(parsed.scatterPoints);
+            setScatterPoints(
+              parsed.scatterPoints.map((pt: any, idx: number) => ({
+                ...pt,
+                id: pt.id !== undefined ? pt.id : idx,
+              }))
+            );
           }
 
           alert("Dashboard data successfully loaded from JSON!");
@@ -351,16 +375,42 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
 
 
+  // Compute log10 bounds from actual scatter data for data-driven normalization
+  const scatterBounds = useMemo(() => {
+    if (scatterPoints.length === 0) return { xMin: -4, xMax: 8, yMin: -4, yMax: 8 };
+    const xLogs = scatterPoints.map(p => Math.log10(Math.max(1e-12, p.wtLeakage)));
+    const yLogs = scatterPoints.map(p => Math.log10(Math.max(1e-12, p.binding)));
+    const xMin = Math.min(...xLogs);
+    const xMax = Math.max(...xLogs);
+    const yMin = Math.min(...yLogs);
+    const yMax = Math.max(...yLogs);
+    // Add a 5% margin
+    const xPad = Math.max(0.5, (xMax - xMin) * 0.05);
+    const yPad = Math.max(0.5, (yMax - yMin) * 0.05);
+    return { xMin: xMin - xPad, xMax: xMax + xPad, yMin: yMin - yPad, yMax: yMax + yPad };
+  }, [scatterPoints]);
+
   const getScatterX = (leakage: number) => {
-    const logVal = Math.log10(leakage);
-    const minLog = -4.0;
-    const maxLog = 0.0;
-    const pct = (logVal - minLog) / (maxLog - minLog);
-    return 40 + pct * 360;
+    const logVal = Math.log10(Math.max(1e-12, leakage));
+    const pct = (logVal - scatterBounds.xMin) / (scatterBounds.xMax - scatterBounds.xMin);
+    return 40 + Math.max(0, Math.min(1, pct)) * 360;
   };
 
   const getScatterY = (binding: number) => {
-    return 170 - binding * 150;
+    const logVal = Math.log10(Math.max(1e-12, binding));
+    const pct = (logVal - scatterBounds.yMin) / (scatterBounds.yMax - scatterBounds.yMin);
+    return 170 - Math.max(0, Math.min(1, pct)) * 150;
+  };
+
+  // Generate nice round log10 tick values within a range
+  const getLogTicks = (minLog: number, maxLog: number, maxTicks: number = 5) => {
+    const ticks: number[] = [];
+    const step = Math.max(1, Math.round((maxLog - minLog) / maxTicks));
+    const start = Math.ceil(minLog);
+    for (let e = start; e <= Math.floor(maxLog); e += step) {
+      ticks.push(e);
+    }
+    return ticks;
   };
 
   const getScatterColor = (access: number) => {
@@ -377,6 +427,56 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     x: number;
     y: number;
   } | null>(null);
+
+  const getFitnessX = (gen: number) => 40 + (gen / 24) * 440;
+  const getFitnessY = (fit: number) => 170 - fit * 140;
+
+  const bestD = useMemo(() => {
+    if (fitnessData.length === 0) return "";
+    const len = fitnessData.length;
+    const getX = (gen: number) => 40 + (gen / (len - 1)) * 440;
+    return "M " + fitnessData.map((d, idx) => `${getX(idx)},${getFitnessY(d.best)}`).join(" L ");
+  }, [fitnessData]);
+
+  const avgD = useMemo(() => {
+    if (fitnessData.length === 0) return "";
+    const len = fitnessData.length;
+    const getX = (gen: number) => 40 + (gen / (len - 1)) * 440;
+    return "M " + fitnessData.map((d, idx) => `${getX(idx)},${getFitnessY(d.avg)}`).join(" L ");
+  }, [fitnessData]);
+
+  // GA Fitness Interactive Tooltip State
+  const [hoveredFitnessData, setHoveredFitnessData] = useState<{
+    generation: number;
+    best: number;
+    avg: number;
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const handleFitnessMouseMove = (e: React.MouseEvent<SVGSVGElement, MouseEvent>) => {
+    if (fitnessData.length === 0) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const plotWidth = 440;
+    const startX = 40;
+    const pct = Math.max(0, Math.min(1, (x - startX) / plotWidth));
+    const idx = Math.round(pct * (fitnessData.length - 1));
+
+    const dataPoint = fitnessData[idx];
+    if (dataPoint) {
+      const getX = (gen: number) => 40 + (gen / (fitnessData.length - 1)) * 440;
+      setHoveredFitnessData({
+        ...dataPoint,
+        x: getX(idx),
+        y: getFitnessY(dataPoint.best),
+      });
+    }
+  };
+
+  const handleFitnessMouseLeave = () => {
+    setHoveredFitnessData(null);
+  };
 
   return (
     <div className="bg-background text-foreground min-h-screen flex font-sans overflow-hidden">
@@ -707,8 +807,193 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               </div>
             </div>
 
+            {/* CARD C: GA Fitness Evolution */}
+            <div className="col-span-3 bg-card text-card-foreground p-6  border border-border  relative group">
+              <div className="flex items-center space-x-1.5 mb-2">
+                <h3 className="font-bold text-card-foreground text-xs tracking-wider uppercase">
+                  GA Fitness Evolution
+                </h3>
+                <div className="relative cursor-pointer group/info">
+                  <Info className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                  <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-48 bg-neutral-900 text-white text-[10px] p-2.5  opacity-0 pointer-events-none group-hover/info:opacity-100 transition-opacity z-50 shadow-lg leading-relaxed">
+                    Tracks the maximum (Best) and mean (Average) fitness scores of RBS designs over the generations of the Genetic Algorithm.
+                  </div>
+                </div>
+              </div>
+
+              {/* Chart Legend */}
+              <div className="flex items-center space-x-4 text-xs font-bold mb-4">
+                <div className="flex items-center space-x-1.5">
+                  <span className="w-3.5 h-0.5 bg-primary inline-block" />
+                  <span className="text-muted-foreground">Best Fitness</span>
+                </div>
+                <div className="flex items-center space-x-1.5">
+                  <span className="w-3.5 h-0.5 border-t border-dashed border-muted-foreground inline-block" />
+                  <span className="text-muted-foreground">Average Fitness</span>
+                </div>
+              </div>
+
+              {/* SVG Plot */}
+              <div className="relative">
+                <svg
+                  viewBox="0 0 500 200"
+                  className="w-full overflow-visible"
+                  onMouseMove={handleFitnessMouseMove}
+                  onMouseLeave={handleFitnessMouseLeave}
+                >
+                  {/* Grid Lines */}
+                  {[0, 0.2, 0.4, 0.6, 0.8, 1.0].map((val) => (
+                    <line
+                      key={val}
+                      x1="40"
+                      y1={getFitnessY(val)}
+                      x2="480"
+                      y2={getFitnessY(val)}
+                      className="stroke-border"
+                      strokeWidth="1"
+                    />
+                  ))}
+                  {fitnessData.length > 0 && [0, 0.25, 0.5, 0.75, 1.0].map((pct) => {
+                    const idx = Math.round(pct * (fitnessData.length - 1));
+                    const len = fitnessData.length;
+                    const x = 40 + (idx / (len - 1)) * 440;
+                    return (
+                      <line
+                        key={pct}
+                        x1={x}
+                        y1="20"
+                        x2={x}
+                        y2="170"
+                        className="stroke-border"
+                        strokeWidth="1"
+                      />
+                    );
+                  })}
+
+                  {/* Axes */}
+                  <line x1="40" y1="170" x2="480" y2="170" className="stroke-muted-foreground/50" strokeWidth="1.5" />
+                  <line x1="40" y1="20" x2="40" y2="170" className="stroke-muted-foreground/50" strokeWidth="1.5" />
+
+                  {/* Axis Labels */}
+                  {fitnessData.length > 0 && [0, 0.25, 0.5, 0.75, 1.0].map((pct) => {
+                    const idx = Math.round(pct * (fitnessData.length - 1));
+                    const gen = fitnessData[idx]?.generation ?? idx;
+                    const len = fitnessData.length;
+                    const x = 40 + (idx / (len - 1)) * 440;
+                    return (
+                      <text
+                        key={pct}
+                        x={x}
+                        y="185"
+                        textAnchor="middle"
+                        className="text-[9px] fill-muted-foreground font-bold"
+                      >
+                        {gen}
+                      </text>
+                    );
+                  })}
+                  <text x="260" y="198" textAnchor="middle" className="text-[10px] fill-muted-foreground font-bold">
+                    Generation
+                  </text>
+
+                  {[0, 0.2, 0.4, 0.6, 0.8, 1.0].map((val) => (
+                    <text
+                      key={val}
+                      x="30"
+                      y={getFitnessY(val) + 3}
+                      textAnchor="end"
+                      className="text-[9px] fill-muted-foreground font-bold"
+                    >
+                      {val.toFixed(1)}
+                    </text>
+                  ))}
+                  <text
+                    x="12"
+                    y="95"
+                    textAnchor="middle"
+                    transform="rotate(-90, 12, 95)"
+                    className="text-[10px] fill-muted-foreground font-bold"
+                  >
+                    Fitness
+                  </text>
+
+                  {/* Line Paths */}
+                  {fitnessData.length > 0 && (
+                    <>
+                      <path
+                        d={avgD}
+                        fill="none"
+                        className="stroke-muted-foreground transition-all duration-300"
+                        strokeWidth="1.5"
+                        strokeDasharray="4,3"
+                      />
+                      <path
+                        d={bestD}
+                        fill="none"
+                        className="stroke-primary transition-all duration-300"
+                        strokeWidth="2"
+                      />
+                    </>
+                  )}
+
+                  {/* Hover Elements */}
+                  {hoveredFitnessData && (
+                    <>
+                      <line
+                        x1={hoveredFitnessData.x}
+                        y1="20"
+                        x2={hoveredFitnessData.x}
+                        y2="170"
+                        className="stroke-muted-foreground"
+                        strokeWidth="1"
+                        strokeDasharray="2,2"
+                      />
+                      <circle
+                        cx={hoveredFitnessData.x}
+                        cy={getFitnessY(hoveredFitnessData.best)}
+                        r="4.5"
+                        className="fill-primary stroke-card"
+                        strokeWidth="1.5"
+                      />
+                      <circle
+                        cx={hoveredFitnessData.x}
+                        cy={getFitnessY(hoveredFitnessData.avg)}
+                        r="4.5"
+                        className="fill-muted-foreground stroke-card"
+                        strokeWidth="1.5"
+                      />
+                    </>
+                  )}
+                </svg>
+
+                {/* Fitness Tooltip overlay */}
+                {hoveredFitnessData && (
+                  <div
+                    className="absolute bg-neutral-900/95 text-white text-[10px] p-2.5  shadow-lg pointer-events-none z-30 flex flex-col space-y-1 border border-neutral-800"
+                    style={{
+                      left: `${(hoveredFitnessData.x / 500) * 100}%`,
+                      top: "24px",
+                      transform: hoveredFitnessData.x > 250 ? "translateX(-110%)" : "translateX(10%)",
+                    }}
+                  >
+                    <div className="font-bold text-neutral-300 border-b border-neutral-800 pb-1 mb-1">
+                      Gen {hoveredFitnessData.generation}
+                    </div>
+                    <div className="flex justify-between space-x-4">
+                      <span className="text-neutral-400 font-semibold">Best:</span>
+                      <span className="font-bold text-red-400">{hoveredFitnessData.best}</span>
+                    </div>
+                    <div className="flex justify-between space-x-4">
+                      <span className="text-neutral-400 font-semibold">Average:</span>
+                      <span className="font-bold text-neutral-400">{hoveredFitnessData.avg}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* CARD D: Orthogonality Landscape */}
-            <div className="col-span-6 bg-card text-card-foreground p-6  border border-border  relative group">
+            <div className="col-span-3 bg-card text-card-foreground p-6  border border-border  relative group">
               <div className="flex items-center space-x-1.5 mb-4">
                 <h3 className="font-bold text-card-foreground text-xs tracking-wider uppercase">
                   Orthogonality Landscape
@@ -731,66 +1016,61 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                     </linearGradient>
                   </defs>
 
-                  {/* Grid Lines */}
-                  {[0, 0.2, 0.4, 0.6, 0.8, 1.0].map((val) => (
+                  {/* Grid Lines — Y axis (binding, log10) */}
+                  {getLogTicks(scatterBounds.yMin, scatterBounds.yMax).map((exp) => (
                     <line
-                      key={val}
+                      key={`y-${exp}`}
                       x1="40"
-                      y1={getScatterY(val)}
+                      y1={getScatterY(Math.pow(10, exp))}
                       x2="400"
-                      y2={getScatterY(val)}
+                      y2={getScatterY(Math.pow(10, exp))}
                       className="stroke-border"
                       strokeWidth="1"
                     />
                   ))}
-                  {[-4, -3, -2, -1, 0].map((exp) => {
-                    const wtLeak = Math.pow(10, exp);
-                    return (
-                      <line
-                        key={exp}
-                        x1={getScatterX(wtLeak)}
-                        y1="20"
-                        x2={getScatterX(wtLeak)}
-                        y2="170"
-                        className="stroke-border"
-                        strokeWidth="1"
-                      />
-                    );
-                  })}
-
+                  {/* Grid Lines — X axis (wtLeakage, log10) */}
+                  {getLogTicks(scatterBounds.xMin, scatterBounds.xMax).map((exp) => (
+                    <line
+                      key={`x-${exp}`}
+                      x1={getScatterX(Math.pow(10, exp))}
+                      y1="20"
+                      x2={getScatterX(Math.pow(10, exp))}
+                      y2="170"
+                      className="stroke-border"
+                      strokeWidth="1"
+                    />
+                  ))}
 
                   {/* Axes */}
                   <line x1="40" y1="170" x2="400" y2="170" className="stroke-muted-foreground/50" strokeWidth="1.5" />
                   <line x1="40" y1="20" x2="40" y2="170" className="stroke-muted-foreground/50" strokeWidth="1.5" />
 
-                  {/* Labels */}
-                  {[-4, -3, -2, -1, 0].map((exp) => {
-                    const wtLeak = Math.pow(10, exp);
-                    return (
-                      <text
-                        key={exp}
-                        x={getScatterX(wtLeak)}
-                        y="185"
-                        textAnchor="middle"
-                        className="text-[9px] fill-muted-foreground font-bold"
-                      >
-                        10<sup>{exp}</sup>
-                      </text>
-                    );
-                  })}
+                  {/* X Axis Labels */}
+                  {getLogTicks(scatterBounds.xMin, scatterBounds.xMax).map((exp) => (
+                    <text
+                      key={`xl-${exp}`}
+                      x={getScatterX(Math.pow(10, exp))}
+                      y="185"
+                      textAnchor="middle"
+                      className="text-[9px] fill-muted-foreground font-bold"
+                    >
+                      10<sup>{exp}</sup>
+                    </text>
+                  ))}
                   <text x="220" y="198" textAnchor="middle" className="text-[10px] fill-muted-foreground font-bold">
-                    WT Leakage (lower is better)
+                    WT Leakage TIR (lower is better)
                   </text>
 
-                  {[0, 0.2, 0.4, 0.6, 0.8, 1.0].map((val) => (
+                  {/* Y Axis Labels */}
+                  {getLogTicks(scatterBounds.yMin, scatterBounds.yMax).map((exp) => (
                     <text
-                      key={val}
-                      x="30"
-                      y={getScatterY(val) + 3}
+                      key={`yl-${exp}`}
+                      x="34"
+                      y={getScatterY(Math.pow(10, exp)) + 3}
                       textAnchor="end"
                       className="text-[9px] fill-muted-foreground font-bold"
                     >
-                      {val.toFixed(1)}
+                      10<sup>{exp}</sup>
                     </text>
                   ))}
                   <text
@@ -859,12 +1139,16 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                       <span className="font-bold text-neutral-300">Candidate Details</span>
                     </div>
                     <div className="flex justify-between space-x-4">
-                      <span className="text-neutral-400 font-semibold">WT Leakage:</span>
-                      <span className="font-bold">{hoveredScatterPoint.wtLeakage.toExponential(2)}</span>
+                      <span className="text-neutral-400 font-semibold">WT Leakage TIR:</span>
+                      <span className="font-bold">
+                        {hoveredScatterPoint.wtLeakage.toExponential(2)}
+                      </span>
                     </div>
                     <div className="flex justify-between space-x-4">
-                      <span className="text-neutral-400 font-semibold">Orthogonal Binding:</span>
-                      <span className="font-bold text-red-400">{hoveredScatterPoint.binding.toFixed(2)}</span>
+                      <span className="text-neutral-400 font-semibold">Orth. Binding TIR:</span>
+                      <span className="font-bold text-red-400">
+                        {hoveredScatterPoint.binding.toExponential(2)}
+                      </span>
                     </div>
                     <div className="flex justify-between space-x-4">
                       <span className="text-neutral-400 font-semibold">Accessibility:</span>
@@ -1047,77 +1331,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 </div>
               </div>
             </div>
-
-            {/* CARD G: Design Insights */}
-            <div className="col-span-2 bg-card text-card-foreground p-6  border border-border  flex flex-col justify-between h-[180px]">
-              <div className="flex items-center space-x-1.5 mb-2">
-                <h3 className="font-bold text-card-foreground text-xs tracking-wider uppercase">
-                  Design Insights
-                </h3>
-                <div className="relative cursor-pointer group/info">
-                  <Info className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-                  <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-48 bg-neutral-900 text-white text-[10px] p-2.5  opacity-0 pointer-events-none group-hover/info:opacity-100 transition-opacity z-50 shadow-lg leading-relaxed">
-                    Shows relative contribution of each parameter to final fitness scores calculated by RiboGuard AI model.
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-2.5">
-                {[
-                  { label: "RBS Accessibility", value: 0.46 },
-                  { label: "Orthogonal Binding", value: 0.31 },
-                  { label: "Spacer Length", value: 0.15 },
-                  { label: "WT Leakage", value: 0.08 },
-                ].map((feat) => (
-                  <div key={feat.label} className="space-y-0.5">
-                    <div className="flex justify-between text-[11px]">
-                      <span className="font-bold text-muted-foreground">{feat.label}</span>
-                      <span className="font-extrabold text-foreground">{feat.value.toFixed(2)}</span>
-                    </div>
-                    <div className="h-2 w-full bg-muted border border-border/30 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-primary rounded-full transition-all duration-500"
-                        style={{ width: `${feat.value * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* CARD H: Validation Status */}
-            <div className="col-span-2 bg-card text-card-foreground p-6  border border-border  flex flex-col justify-between h-[180px]">
-              <div className="flex items-center space-x-1.5 mb-2 border-b border-border pb-2">
-                <h3 className="font-bold text-card-foreground text-xs tracking-wider uppercase">
-                  Validation Status
-                </h3>
-                <div className="relative cursor-pointer group/info">
-                  <Info className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-                  <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-48 bg-neutral-900 text-white text-[10px] p-2.5  opacity-0 pointer-events-none group-hover/info:opacity-100 transition-opacity z-50 shadow-lg leading-relaxed">
-                    Secondary folding checkers using standard toolkits to double-check design reliability.
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-2.5">
-                {[
-                  { label: "RNAfold", value: "pass" },
-                  { label: "RNAduplex", value: "strong orthogonal match" },
-                  { label: "IntaRNA", value: "low WT interaction" },
-                ].map((val) => (
-                  <div key={val.label} className="flex items-center space-x-2.5">
-                    <div className="w-5 h-5 rounded-full bg-primary/5 flex items-center justify-center border border-primary/10">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
-                    </div>
-                    <div className="text-xs">
-                      <span className="font-bold text-muted-foreground mr-1.5">{val.label}:</span>
-                      <span className="font-extrabold text-primary">{val.value}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
           </div>
         </div>
 
