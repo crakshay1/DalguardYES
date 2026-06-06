@@ -1,0 +1,30 @@
+# Node.js dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# React Router & Vite build artifacts
+build/
+.react-router/
+.wrangler/
+*.tsbuildinfo
+
+# Python temporary files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.ipynb_checkpoints/
+
+# Project-specific generated outputs
+2ndStruct/*.csv
+mutations_report.csv
+
+# LinearFold compiled binaries and object files
+2ndStruct/LinearFold/bin/
+2ndStruct/LinearFold/src/*.o

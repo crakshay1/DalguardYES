@@ -1,0 +1,98 @@
+[
+  {
+    "name": "RNA 3D Structure Prediction",
+    "logo": "/img.jpg",
+    "description": "This guide provides detailed explanations of all command-line interface (CLI) options and usage patterns for the main entry points of the project.",
+    "url": "",
+    "tags": [
+      "Python",
+      "PyTorch",
+      "PyMol"
+    ],
+    "sections": [
+      {
+        "title": "Introduction",
+        "content": "<h1>Command-Line Interface and Usage Guide</h1>\n<p>This guide provides detailed explanations of all command-line \ninterface (CLI) options and usage patterns for the main entry points of \nthe project: <code><span>main.py</span></code>, <code><span>main_lbfgs.py</span></code>, and <code><span>manage_dataset.py</span></code>.</p>",
+        "subsections": []
+      },
+      {
+        "title": "Optimizing 3D RNA Structures: main.py",
+        "content": "<p>The <code><span>main.py</span></code>\n script is the primary entry point to launch high-performance \noptimizations using Adam. It supports both interactive terminal Prompts \nand batch options suitable for cluster jobs.</p>",
+        "subsections": [
+          {
+            "title": "How to Run",
+            "content": "<div><div><pre><span></span>python<span> </span>main.py<span> </span>launch<span> </span><span>[</span>OPTIONS<span>]</span>\n</pre></div>\n</div>"
+          },
+          {
+            "title": "General Options",
+            "content": "<dl>\n<dt>–molecule [Protein|RNA]</dt><dd><p>The type of molecule to optimize (default: <code><span>RNA</span></code>).</p>\n</dd>\n<dt>–method [1|2]</dt><dd><p>The optimization method:</p>\n<ul>\n<li><p><code><span>1</span></code>: Bead-springs (Coarse-Grained)</p></li>\n<li><p><code><span>2</span></code>: Full atoms (All atoms)</p></li>\n</ul>\n</dd>\n<dt>–input-type [1|2]</dt><dd><p>The format of the input molecule:</p>\n<ul>\n<li><p><code><span>1</span></code>: Direct sequence string (e.g., <code><span>ACGU</span></code>)</p></li>\n<li><p><code><span>2</span></code>: Path to a FASTA file</p></li>\n</ul>\n</dd>\n</dl>\n<dl>\n<dt><kbd><span>--input-val <var>TEXT</var></span></kbd></dt>\n<dd><p>The sequence string or FASTA file path depending on the <code><span>--input-type</span></code> (Required in batch mode).</p>\n</dd>\n<dt><kbd><span>--output <var>TEXT</var></span></kbd></dt>\n<dd><p>The path to the output folder or specific filename where the optimized PDB structure will be saved.</p>\n</dd>\n<dt><kbd><span>--cif</span></kbd></dt>\n<dd><p>Flag to export the final structure in mmCIF format in addition to PDB.</p>\n</dd>\n<dt><kbd><span>--verbose</span></kbd></dt>\n<dd><p>Flag to enable detailed console logging.</p>\n</dd>\n<dt><kbd><span>--confirm</span></kbd></dt>\n<dd><p>Flag to display a summary of configuration parameters and ask for user confirmation before launching.</p>\n</dd>\n<dt><kbd><span>--batch</span></kbd></dt>\n<dd><p>Flag to run in non-interactive batch mode (suitable for automation/clusters).</p>\n</dd>\n</dl>"
+          },
+          {
+            "title": "Metrics and Evaluation",
+            "content": "<dl>\n<dt><kbd><span>--target-structure <var>TEXT</var></span></kbd></dt>\n<dd><p>Path to a target/reference PDB structure to calculate comparative metrics (such as RMSD/MAE).</p>\n</dd>\n<dt><kbd><span>--chain <var>TEXT</var></span></kbd></dt>\n<dd><p>Chain ID to extract from the reference PDB structure.</p>\n</dd>\n<dt><kbd><span>--save-metrics</span></kbd></dt>\n<dd><p>Flag to save the final optimization metrics to a CSV file.</p>\n</dd>\n<dt><kbd><span>--output-metrics <var>TEXT</var></span></kbd></dt>\n<dd><p>The filename for output metrics CSV (default: <code><span>metrics.csv</span></code>).</p>\n</dd>\n</dl>"
+          },
+          {
+            "title": "Visualization",
+            "content": "<dl>\n<dt><kbd><span>--visualise</span></kbd></dt>\n<dd><p>Flag to generate a 3D folding animation video (requires <code><span>ffmpeg</span></code>). Saves intermediate PNG snapshots every 200 epochs and builds an MP4 at the end.</p>\n</dd>\n<dt><kbd><span>--vis-metrics</span></kbd></dt>\n<dd><p>Flag to save intermediate folding metrics (<code><span>folding_vis.csv</span></code>) without generating structural snapshots and the final MP4 video.</p>\n</dd>\n<dt><kbd><span>--vis-dir <var>TEXT</var></span></kbd></dt>\n<dd><p>Specific directory where visualization snapshots and metrics should be saved.</p>\n</dd>\n</dl>"
+          },
+          {
+            "title": "Optimization Parameters (Adam Engine)",
+            "content": "<dl>\n<dt><kbd><span>--patience-locale <var>INTEGER</var></span></kbd></dt>\n<dd><p>Number of iterations without improvement (within <code><span>--min-delta</span></code>) before terminating a local optimization phase (default: <code><span>100</span></code>).</p>\n</dd>\n<dt><kbd><span>--patience-globale <var>INTEGER</var></span></kbd></dt>\n<dd><p>Number of global cycles without improvement before stopping the overall Basin Hopping loop (default: <code><span>5</span></code>).</p>\n</dd>\n<dt><kbd><span>--min-delta <var>FLOAT</var></span></kbd></dt>\n<dd><p>Minimum change in energy to qualify as an improvement (default: <code><span>1e-4</span></code>).</p>\n</dd>\n<dt><kbd><span>--taux-refroidissement <var>FLOAT</var></span></kbd></dt>\n<dd><p>Cooling rate / decay factor for the noise base at each Basin Hopping cycle (default: <code><span>0.85</span></code>).</p>\n</dd>\n<dt><kbd><span>--bruit-min <var>FLOAT</var></span></kbd></dt>\n<dd><p>Minimum coordinate noise in Angstroms under which global cycles stop (default: <code><span>0.01</span></code>).</p>\n</dd>\n<dt><kbd><span>--noise-coords <var>FLOAT</var></span></kbd></dt>\n<dd><p>Initial coordinate noise perturbation factor in Angstroms (default: <code><span>1.5</span></code>).</p>\n</dd>\n<dt><kbd><span>--bead-atom <var>TEXT</var></span></kbd></dt>\n<dd><p>The specific bead atom type representing each residue in coarse-grained optimization (default: <code><span>C4'</span></code>).</p>\n</dd>\n<dt><kbd><span>--score <var>TEXT</var></span></kbd></dt>\n<dd><p>The statistical potential or scoring function to drive the optimization:</p>\n<ul>\n<li><p>For RNA: <code><span>RASP</span></code>, <code><span>DFIRE</span></code>, <code><span>rsRNASP</span></code>, <code><span>cgRNASP</span></code>, <code><span>RMSD</span></code>, <code><span>MAE</span></code>, or <code><span>All</span></code>.</p></li>\n<li><p>For Protein: <code><span>DFIRE_P</span></code>, <code><span>RMSD</span></code>, <code><span>MAE</span></code>, or <code><span>All</span></code>.</p></li>\n</ul>\n</dd>\n<dt><kbd><span>--score-weight <var>FLOAT</var></span></kbd></dt>\n<dd><p>Stochastic energy score multiplier weight (default: <code><span>1.0</span></code>).</p>\n</dd>\n<dt><kbd><span>--epsilon-wca <var>FLOAT</var></span></kbd></dt>\n<dd><p>Repulsive scaling parameter for Weeks-Chandler-Andersen steric potential (default: <code><span>1.0</span></code>).</p>\n</dd>\n<dt><kbd><span>--relax</span></kbd></dt>\n<dd><p>Flag to physically relax the final all-atom PDB using OpenMM and Amber14 forcefield.</p>\n</dd>\n</dl>"
+          },
+          {
+            "title": "Full-Atom Specific Options",
+            "content": "<dl>\n<dt><kbd><span>--backbone-weight <var>INTEGER</var></span></kbd></dt>\n<dd><p>Harmonic spring weight constraint to keep virtual backbone O3’-P covalent bonds intact (default: <code><span>100</span></code>).</p>\n</dd>\n<dt><kbd><span>--clash-weight <var>INTEGER</var></span></kbd></dt>\n<dd><p>Steric clash penalty weight based on Van der Waals radii interpenetration (default: <code><span>100</span></code>).</p>\n</dd>\n<dt><kbd><span>--noise-angles <var>FLOAT</var></span></kbd></dt>\n<dd><p>Initial angular noise perturbation factor in radians (default: <code><span>0.5</span></code>).</p>\n</dd>\n</dl>"
+          }
+        ]
+      },
+      {
+        "title": "L-BFGS Optimization: main_lbfgs.py",
+        "content": "<p>The <code><span>main_lbfgs.py</span></code> script exposes the exact same optimization suite but leverages the L-BFGS optimizer instead of Adam.</p>",
+        "subsections": [
+          {
+            "title": "How to Run",
+            "content": "<div><div><pre><span></span>python<span> </span>main_lbfgs.py<span> </span>launch<span> </span><span>[</span>OPTIONS<span>]</span>\n</pre></div>\n</div>"
+          },
+          {
+            "title": "Additional L-BFGS Options",
+            "content": "<p>In addition to all options present in <code><span>main.py</span></code>, the following parameters are available:</p>\n<dl>\n<dt><kbd><span>--lr <var>FLOAT</var></span></kbd></dt>\n<dd><p>The learning rate / initial step size for L-BFGS (default: <code><span>0.2</span></code>).</p>\n</dd>\n<dt><kbd><span>--init-structure <var>TEXT</var></span></kbd></dt>\n<dd><p>The path to an initial PDB structure to start the L-BFGS optimization from, enabling refinement of existing models.</p>\n</dd>\n</dl>"
+          }
+        ]
+      },
+      {
+        "title": "Dataset and Statistics Management: manage_dataset.py",
+        "content": "<p>The <code><span>manage_dataset.py</span></code>\n script is a utility toolkit to download structures from RCSB PDB, \ngenerate distance/angle statistics, clean structures, or automate \nworkflows.</p>\n<p>It is structured into distinct subcommands.</p>",
+        "subsections": [
+          {
+            "title": "How to Run",
+            "content": "<div><div><pre><span></span>python<span> </span>manage_dataset.py<span> </span><span>[</span>COMMAND<span>]</span><span> </span><span>[</span>OPTIONS<span>]</span>\n</pre></div>\n</div>"
+          },
+          {
+            "title": "Available Commands",
+            "content": ""
+          },
+          {
+            "title": "retrieve_data",
+            "content": "<p>Downloads a dataset matching specific quality and resolution criteria.</p>\n<div><div><pre><span></span>python<span> </span>manage_dataset.py<span> </span>retrieve_data<span> </span><span>[</span>FOLDER_PATH<span>]</span><span> </span><span>[</span>OPTIONS<span>]</span>\n</pre></div>\n</div>\n<ul>\n<li><p><code><span>FOLDER_PATH</span></code> (Argument): Directory where structures will be saved.</p></li>\n<li><p><code><span>-m,</span> <span>--molecule</span> <span>[RNA|Protein]</span></code>: Molecule type to download (default: <code><span>RNA</span></code>).</p></li>\n<li><p><code><span>-r,</span> <span>--resolution</span> <span>FLOAT</span></code>: Maximum allowed experimental resolution in Angstroms (default: <code><span>1.1</span></code>).</p></li>\n<li><p><code><span>-e,</span> <span>--extension</span> <span>[mmCif|pdb]</span></code>: Target file format to download (default: <code><span>mmCif</span></code>).</p></li>\n<li><p><code><span>--pure/--no-pure</span></code>: Download only pure structures (e.g., only RNA, excluding complexes) (default: <code><span>True</span></code>).</p></li>\n</ul>"
+          },
+          {
+            "title": "make_distri",
+            "content": "<p>Extracts and saves consecutive residue distances from a folder of PDB/mmCIF structures.</p>\n<div><div><pre><span></span>python<span> </span>manage_dataset.py<span> </span>make_distri<span> </span><span>[</span>FOLDER_PATH<span>]</span><span> </span><span>[</span>OPTIONS<span>]</span>\n</pre></div>\n</div>\n<ul>\n<li><p><code><span>FOLDER_PATH</span></code> (Argument): Folder containing structures to analyze.</p></li>\n<li><p><code><span>-m,</span> <span>--molecule</span> <span>[RNA|Protein]</span></code>: Molecule type (default: <code><span>RNA</span></code>).</p></li>\n<li><p><code><span>-a,</span> <span>--ref-atom</span> <span>TEXT</span></code>: The atom type to measure distances between (default: <code><span>C3'</span></code>).</p></li>\n<li><p><code><span>-o,</span> <span>--output</span> <span>TEXT</span></code>: Prefix path for output CSV files (default: <code><span>distances</span></code>).</p></li>\n<li><p><code><span>--save-distances/--no-save-distances</span></code>: Save all individual pairwise measurements to a CSV (default: <code><span>True</span></code>).</p></li>\n<li><p><code><span>--save-summary/--no-save-summary</span></code>: Save overall statistical indicators (mean, std, min, max) to <code><span>results_summary.csv</span></code> (default: <code><span>True</span></code>).</p></li>\n</ul>"
+          },
+          {
+            "title": "extract_sequences",
+            "content": "<p>Extracts nucleotide sequences and headers from PDB files in a directory.</p>\n<div><div><pre><span></span>python<span> </span>manage_dataset.py<span> </span>extract_sequences<span> </span><span>[</span>FOLDER_PATH<span>]</span><span> </span><span>[</span>OPTIONS<span>]</span>\n</pre></div>\n</div>\n<ul>\n<li><p><code><span>FOLDER_PATH</span></code> (Argument): Directory containing PDB files.</p></li>\n<li><p><code><span>-o,</span> <span>--output</span> <span>TEXT</span></code>: Output CSV filename (default: <code><span>sequences.csv</span></code>).</p></li>\n</ul>"
+          },
+          {
+            "title": "clean_pdb",
+            "content": "<p>Cleans PDB structures by stripping away protein chains and ligand heteroatoms to isolate pure nucleic acids.</p>\n<div><div><pre><span></span>python<span> </span>manage_dataset.py<span> </span>clean_pdb<span> </span><span>[</span>FOLDER_PATH<span>]</span><span> </span><span>[</span>OPTIONS<span>]</span>\n</pre></div>\n</div>\n<ul>\n<li><p><code><span>FOLDER_PATH</span></code> (Argument): Directory containing PDB files.</p></li>\n<li><p><code><span>-o,</span> <span>--output</span> <span>TEXT</span></code>: Folder to save cleaned structures. If not specified, modifies files in-place.</p></li>\n</ul>"
+          },
+          {
+            "title": "auto",
+            "content": "<p>An interactive wizard that automates both dataset retrieval and statistical calculations.</p>\n<div><div><pre><span></span>python<span> </span>manage_dataset.py<span> </span>auto<span> </span><span>[</span>FOLDER_PATH<span>]</span><span> </span><span>[</span>OPTIONS<span>]</span>\n</pre></div>\n</div>\n<ul>\n<li><p><code><span>FOLDER_PATH</span></code> (Argument): Target directory for dataset and statistics.</p></li>\n<li><p>Accepts all options from <code><span>retrieve_data</span></code> and <code><span>make_distri</span></code> commands.</p></li>\n</ul>"
+          }
+        ]
+      }
+    ]
+  }
+]
