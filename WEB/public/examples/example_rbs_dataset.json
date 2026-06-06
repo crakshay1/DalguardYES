@@ -13,7 +13,7 @@
       "wtLeakage": "0.012",
       "rbsAccess": "0.91",
       "fitness": "0.94",
-      "structure": "((((((.......))),). ... ((...)) AUG ....."
+      "structure": "((((((.......)))). ... ((...)) AUG ....."
     },
     {
       "rbs": "GGAGGAG",
@@ -35,24 +35,92 @@
     }
   ],
   "fitnessData": [
-    { "generation": 0, "best": 0.18, "avg": 0.10 },
-    { "generation": 10, "best": 0.32, "avg": 0.18 },
-    { "generation": 20, "best": 0.48, "avg": 0.25 },
-    { "generation": 30, "best": 0.61, "avg": 0.34 },
-    { "generation": 40, "best": 0.72, "avg": 0.41 },
-    { "generation": 50, "best": 0.79, "avg": 0.46 },
-    { "generation": 60, "best": 0.84, "avg": 0.50 },
-    { "generation": 70, "best": 0.88, "avg": 0.52 },
-    { "generation": 80, "best": 0.91, "avg": 0.54 },
-    { "generation": 90, "best": 0.93, "avg": 0.56 },
-    { "generation": 100, "best": 0.95, "avg": 0.58 }
+    {
+      "generation": 0,
+      "best": 0.18,
+      "avg": 0.10
+    },
+    {
+      "generation": 10,
+      "best": 0.32,
+      "avg": 0.18
+    },
+    {
+      "generation": 20,
+      "best": 0.48,
+      "avg": 0.25
+    },
+    {
+      "generation": 30,
+      "best": 0.61,
+      "avg": 0.34
+    },
+    {
+      "generation": 40,
+      "best": 0.72,
+      "avg": 0.41
+    },
+    {
+      "generation": 50,
+      "best": 0.79,
+      "avg": 0.46
+    },
+    {
+      "generation": 60,
+      "best": 0.84,
+      "avg": 0.50
+    },
+    {
+      "generation": 70,
+      "best": 0.88,
+      "avg": 0.52
+    },
+    {
+      "generation": 80,
+      "best": 0.91,
+      "avg": 0.54
+    },
+    {
+      "generation": 90,
+      "best": 0.93,
+      "avg": 0.56
+    },
+    {
+      "generation": 100,
+      "best": 0.95,
+      "avg": 0.58
+    }
   ],
   "scatterPoints": [
-    { "wtLeakage": 0.0001, "binding": 0.92, "access": 0.91 },
-    { "wtLeakage": 0.0024, "binding": 0.88, "access": 0.85 },
-    { "wtLeakage": 0.0410, "binding": 0.83, "access": 0.78 },
-    { "wtLeakage": 0.1200, "binding": 0.54, "access": 0.62 },
-    { "wtLeakage": 0.0080, "binding": 0.71, "access": 0.75 },
-    { "wtLeakage": 0.3500, "binding": 0.32, "access": 0.40 }
+    {
+      "wtLeakage": 0.0001,
+      "binding": 0.92,
+      "access": 0.91
+    },
+    {
+      "wtLeakage": 0.0024,
+      "binding": 0.88,
+      "access": 0.85
+    },
+    {
+      "wtLeakage": 0.0410,
+      "binding": 0.83,
+      "access": 0.78
+    },
+    {
+      "wtLeakage": 0.1200,
+      "binding": 0.54,
+      "access": 0.62
+    },
+    {
+      "wtLeakage": 0.0080,
+      "binding": 0.71,
+      "access": 0.75
+    },
+    {
+      "wtLeakage": 0.3500,
+      "binding": 0.32,
+      "access": 0.40
+    }
   ]
 }

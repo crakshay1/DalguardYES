@@ -176,9 +176,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   const [fileName, setFileName] = useState("");
 
   // Input states
-  const [orthogonalAntiSD, setOrthogonalAntiSD] = useState("ACTTGTATA");
-  const [wtAntiSD, setWtAntiSD] = useState("ACCTCCTTA");
-  const [cdsStart, setCdsStart] = useState("ATGCUACU...");
+  const [orthogonalAntiSD, setOrthogonalAntiSD] = useState("");
+  const [wtAntiSD, setWtAntiSD] = useState("");
+  const [cdsStart, setCdsStart] = useState("");
   const [targetExpression, setTargetExpression] = useState("High");
 
   // Selection state
@@ -312,6 +312,49 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
   const selectedCandidate = candidates[selectedCandidateIndex];
 
+  // Auto-sync computed sequence and annotations to localStorage for Structure Inspector
+  useEffect(() => {
+    if (selectedCandidate) {
+      const upstream = "GCTTT";
+      const rbsSeq = selectedCandidate.rbs.replace(/U/g, "T");
+      const spacerSeq = selectedCandidate.spacer.replace(/U/g, "T");
+      const startCodon = "ATG";
+
+      // Calculate remaining CDS sequence from cdsStart field
+      const cdsRemaining = cdsStart
+        .replace(/\./g, "")
+        .replace(/U/g, "T")
+        .toUpperCase();
+
+      const cdsPart = cdsRemaining.startsWith("ATG") ? cdsRemaining.substring(3) : cdsRemaining;
+      const computedSeq = upstream + rbsSeq + spacerSeq + startCodon + cdsPart;
+
+      const newAnnotations = [
+        { name: "Upstream", start: 0, end: upstream.length, direction: 1, color: "#6b7280" },
+        { name: "RBS Site", start: upstream.length, end: upstream.length + rbsSeq.length, direction: 1, color: "#dc2626" },
+        { name: "Spacer", start: upstream.length + rbsSeq.length, end: upstream.length + rbsSeq.length + spacerSeq.length, direction: 1, color: "#eab308" },
+        { name: "Start Codon", start: upstream.length + rbsSeq.length + spacerSeq.length, end: upstream.length + rbsSeq.length + spacerSeq.length + 3, direction: 1, color: "#3b82f6" }
+      ];
+
+      if (cdsPart.length > 0) {
+        newAnnotations.push({
+          name: "Coding Sequence (CDS)",
+          start: upstream.length + rbsSeq.length + spacerSeq.length + 3,
+          end: computedSeq.length,
+          direction: 1,
+          color: "#10b981"
+        });
+      }
+
+      localStorage.setItem("riboguard_computed_sequence", JSON.stringify({
+        name: `RiboGuard_Candidate_${selectedCandidate.rbs}_${selectedCandidate.spacer}`,
+        sequence: computedSeq,
+        structure: selectedCandidate.structure,
+        annotations: newAnnotations
+      }));
+    }
+  }, [selectedCandidate, cdsStart]);
+
   const getFitnessX = (gen: number) => 40 + (gen / 100) * 440;
   const getFitnessY = (fit: number) => 170 - fit * 140;
 
@@ -437,7 +480,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
           <div className="flex items-center space-x-4">
             {/* Theme Toggle */}
-            <ThemeToggle />
 
 
 
@@ -879,33 +921,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                     );
                   })}
 
-                  {/* Dashed Best Region Rect (Red theme) */}
-                  {(() => {
-                    const x1 = getScatterX(0.0001);
-                    const x2 = getScatterX(0.001);
-                    const y1 = getScatterY(0.90);
-                    const y2 = getScatterY(0.60);
-                    return (
-                      <g>
-                        <rect
-                          x={x1}
-                          y={y1}
-                          width={x2 - x1}
-                          height={y2 - y1}
-                          className="fill-primary/5 stroke-primary"
-                          strokeWidth="1.5"
-                          strokeDasharray="4,3"
-                        />
-                        <text
-                          x={x1 + 6}
-                          y={y1 + 14}
-                          className="fill-primary text-[8px] font-extrabold"
-                        >
-                          Best Region
-                        </text>
-                      </g>
-                    );
-                  })()}
 
                   {/* Axes */}
                   <line x1="40" y1="170" x2="400" y2="170" className="stroke-muted-foreground/50" strokeWidth="1.5" />
