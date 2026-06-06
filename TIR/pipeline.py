@@ -35,9 +35,8 @@ It outputs dashboard-ready files:
     - binding_sites.csv    all binding-site results for top candidates
 
 Notes:
-    - Folding uses LinearFold if available, otherwise ViennaRNA.
-    - Delta-G duplex and standby calculations require ViennaRNA.
-    - No pseudo-folding or approximate duplex fallback is used in this version.
+    - ViennaRNA is optional but recommended: pip install ViennaRNA
+    - If ViennaRNA is unavailable, the code uses lightweight fallback approximations.
     - The code uses RNA internally. DNA T is normalized to RNA U.
 """
 
@@ -67,8 +66,8 @@ DEFAULT_FLANK = "AAUAAU"
 DEFAULT_CDS_START = "AUGGCUACUAAAGAAAACGCUACUGCU"
 
 # Physical constants requested by team
-R_KCAL = 1.987e-3       # kcal/mol/K
-TEMP_K = 310.15         # 37 C
+R_KCAL = 1.987e-3  # kcal/mol/K
+TEMP_K = 310.15  # 37 C
 RT_PHYSICAL = R_KCAL * TEMP_K
 
 # Salis-style prefactor
@@ -97,6 +96,7 @@ LONG_RANGE_THRESHOLD_NT = 35
 # -------------------------
 # Data classes
 # -------------------------
+
 
 @dataclass
 class BindingSiteResult:
@@ -159,11 +159,13 @@ class CandidateEval:
     orthScore: float
     wtLeakage: float
     fitness: float
+    status: str
 
 
 # -------------------------
 # Basic utilities
 # -------------------------
+
 
 def normalize_rna(seq: str) -> str:
     """Uppercase, DNA-to-RNA, keep only A/U/G/C."""
@@ -211,23 +213,18 @@ def gc_fraction(seq: str) -> float:
 # Folding backend
 # -------------------------
 
+
 def fold_sequence(sequence: str) -> Tuple[str, float, str]:
     """
     Fold a single RNA sequence.
-
-    Backend priority:
+    Priority:
       1) LinearFold if ./LinearFold/bin/linearfold_c exists
       2) ViennaRNA Python package
-
-    No pseudo-folding fallback is used. If neither backend is available,
-    this function raises RuntimeError so the result cannot silently rely on
-    fake folding.
+      3) fallback pseudo-folder
     """
     seq = normalize_rna(sequence)
-    if not seq:
-        return "", 0.0, "empty"
 
-    # 1) LinearFold, if available.
+    # 1) LinearFold, if available
     linear_path = "./LinearFold/bin/linearfold_c"
     if os.path.exists(linear_path) and os.access(linear_path, os.X_OK):
         try:
@@ -239,36 +236,73 @@ def fold_sequence(sequence: str) -> Tuple[str, float, str]:
                 stderr=subprocess.PIPE,
                 text=True,
             )
-            out, err = process.communicate(input=f"{seq}\n", timeout=20)
+            out, _err = process.communicate(input=f"{seq}\n")
             toks = out.split()
             if len(toks) >= 3:
                 dot = toks[1]
                 mfe = float(toks[2].strip("()"))
                 if len(dot) == len(seq):
                     return dot, mfe, "LinearFold"
-            # If LinearFold exists but output was invalid, continue to ViennaRNA.
         except Exception:
-            # Continue to ViennaRNA if LinearFold fails.
             pass
 
-    # 2) ViennaRNA. Required if LinearFold is not available/usable.
+    # 2) ViennaRNA
     try:
         import RNA  # type: ignore
-    except Exception as exc:
-        raise RuntimeError(
-            "No RNA folding backend available. Install ViennaRNA or provide "
-            "./LinearFold/bin/linearfold_c."
-        ) from exc
 
-    dot, mfe = RNA.fold(seq)
-    if len(dot) != len(seq):
-        raise RuntimeError("ViennaRNA returned a structure with unexpected length.")
-    return dot, float(mfe), "ViennaRNA"
+        dot, mfe = RNA.fold(seq)
+        return dot, float(mfe), "ViennaRNA"
+    except Exception:
+        pass
+
+    # 3) fallback
+    dot, mfe = fallback_fold(seq)
+    return dot, mfe, "Fallback pseudo-fold"
+
+
+def fallback_fold(seq: str) -> Tuple[str, float]:
+    """
+    Demo-only fallback. It is NOT a real RNA folding engine.
+    """
+    seq = normalize_rna(seq)
+    n = len(seq)
+    dot = ["."] * n
+    paired = [False] * n
+    energy = 0.0
+    min_loop = 4
+
+    def pair_e(a: str, b: str) -> float:
+        if (a, b) in [("G", "C"), ("C", "G")]:
+            return -3.0
+        if (a, b) in [("A", "U"), ("U", "A")]:
+            return -2.0
+        if (a, b) in [("G", "U"), ("U", "G")]:
+            return -0.8
+        return 0.0
+
+    for i in range(n):
+        if paired[i]:
+            continue
+        best_j, best_e = None, 0.0
+        for j in range(n - 1, i + min_loop, -1):
+            if paired[j]:
+                continue
+            e = pair_e(seq[i], seq[j])
+            if e < best_e:
+                best_j, best_e = j, e
+        if best_j is not None and random.random() < 0.50:
+            dot[i] = "("
+            dot[best_j] = ")"
+            paired[i] = paired[best_j] = True
+            energy += best_e
+
+    return "".join(dot), round(energy, 2)
 
 
 # -------------------------
 # Secondary structure helpers
 # -------------------------
+
 
 def pair_table_from_dotbracket(dotbracket: str) -> List[int]:
     pair_table = [-1] * len(dotbracket)
@@ -317,6 +351,7 @@ def rbs_long_range_interactions(
 # Energetics
 # -------------------------
 
+
 def pair_energy(rbs_base: str, asd_base: str) -> float:
     """
     Lightweight energy-like base-pair scoring.
@@ -362,13 +397,13 @@ def dG_standby(mRNA_upstream: str, anti_sd: str) -> float:
         anti_sd: anti-Shine-Dalgarno sequence, 5'->3'
 
     Returns:
-        dG_standby <= 0.0. If no SD:aSD interaction is found, returns 0.0.
-        Requires ViennaRNA; no approximate fallback is used.
+        dG_standby <= 0.0. If ViennaRNA is unavailable or no SD:aSD
+        interaction is found, returns 0.0.
     """
     try:
         import RNA  # type: ignore
-    except Exception as exc:
-        raise RuntimeError("dG_standby requires ViennaRNA. Install with: pip install ViennaRNA") from exc
+    except Exception:
+        return 0.0
 
     mRNA = normalize_rna(mRNA_upstream)
     rRNA = normalize_rna(anti_sd)
@@ -411,14 +446,19 @@ def dG_standby(mRNA_upstream: str, anti_sd: str) -> float:
         ss = ss.replace("&", "")
         return ss, float(dG)
 
-    def _eval_structure(mRNA_seq: str, rRNA_seq: str, bp_x: List[int], bp_y: List[int]) -> float:
+    def _eval_structure(
+        mRNA_seq: str, rRNA_seq: str, bp_x: List[int], bp_y: List[int]
+    ) -> float:
         n = len(mRNA_seq) + len(rRNA_seq)
         ss = _pairs_to_dotbracket(n, bp_x, bp_y)
         fc = RNA.fold_compound(mRNA_seq + "&" + rRNA_seq, md)
         return float(fc.eval_structure(ss))
 
     # Step 1: cofold mRNA upstream with anti-SD.
-    ss_co, energy_before = _cofold(mRNA, rRNA)
+    try:
+        ss_co, energy_before = _cofold(mRNA, rRNA)
+    except Exception:
+        return 0.0
 
     all_pairs = _parse_pairs(ss_co)
     bp_x = [p[0] for p in all_pairs]
@@ -456,13 +496,18 @@ def dG_standby(mRNA_upstream: str, anti_sd: str) -> float:
     bp_x_after = bp_x_5p + bp_x_3p
     bp_y_after = bp_y_5p + bp_y_3p
 
-    energy_after = _eval_structure(mRNA, rRNA, bp_x_after, bp_y_after)
+    try:
+        energy_after = _eval_structure(mRNA, rRNA, bp_x_after, bp_y_after)
+    except Exception:
+        return 0.0
 
     # Free standby site is not a bonus beyond zero.
     return float(min(0.0, energy_before - energy_after))
 
 
-def dG_spacing_penalty(aligned_spacing: float, optimal_spacing: float = OPTIMAL_SPACING) -> Tuple[float, float]:
+def dG_spacing_penalty(
+    aligned_spacing: float, optimal_spacing: float = OPTIMAL_SPACING
+) -> Tuple[float, float]:
     """
     Salis-style spacing penalty.
 
@@ -490,7 +535,9 @@ def calculate_tir(dG_total: float, r0: float = R0, rt: float = RT_PHYSICAL) -> f
     return float(r0 * math.exp(arg))
 
 
-def dG_mrna_unfolding_site(full_seq: str, site_start: int, site_end: int, window: int = 35) -> float:
+def dG_mrna_unfolding_site(
+    full_seq: str, site_start: int, site_end: int, window: int = 35
+) -> float:
     """
     Positive local unfolding penalty around a binding site.
     Approximation: penalty = -MFE(local region), clipped at >= 0.
@@ -503,35 +550,67 @@ def dG_mrna_unfolding_site(full_seq: str, site_start: int, site_end: int, window
     return max(0.0, -float(mfe))
 
 
-def cofold_deltaG(utr: str, anti_sd: str) -> float:
+def cofold_deltaG(utr: str, anti_sd: str) -> Optional[float]:
     """
     Candidate-level duplex term:
       dG_binding = dG_complex - dG_utr - dG_asd
 
-    Requires ViennaRNA. No approximate fallback is used.
+    Requires ViennaRNA. Returns None if unavailable.
     """
     try:
         import RNA  # type: ignore
-    except Exception as exc:
-        raise RuntimeError("cofold_deltaG requires ViennaRNA. Install with: pip install ViennaRNA") from exc
 
+        utr = normalize_rna(utr)
+        anti_sd = normalize_rna(anti_sd)
+        _struct_complex, mfe_complex = RNA.cofold(f"{utr}&{anti_sd}")
+        _struct_utr, mfe_utr = RNA.fold(utr)
+        _struct_asd, mfe_asd = RNA.fold(anti_sd)
+        return float(mfe_complex - mfe_utr - mfe_asd)
+    except Exception:
+        return None
+
+
+def approximate_dG_duplex_whole_utr(
+    utr: str, anti_sd: str, min_overlap: int = 5
+) -> float:
+    """
+    Fallback approximate candidate-level duplex energy.
+    Scans complementarity between whole UTR and reversed anti-SD and returns
+    the best local alignment energy.
+    """
     utr = normalize_rna(utr)
-    anti_sd = normalize_rna(anti_sd)
-    if not utr or not anti_sd:
+    anti_rev = normalize_rna(anti_sd)[::-1]
+    if not utr or not anti_rev:
         return 0.0
 
-    struct_complex, mfe_complex = RNA.cofold(f"{utr}&{anti_sd}")
-    struct_utr, mfe_utr = RNA.fold(utr)
-    struct_asd, mfe_asd = RNA.fold(anti_sd)
-    return float(mfe_complex - mfe_utr - mfe_asd)
+    best_energy = 0.0  # 0 means no favorable interaction
+    for mrna_start in range(len(utr)):
+        for asd_start_rev in range(len(anti_rev)):
+            energy = 0.0
+            overlap = 0
+            i, j = mrna_start, asd_start_rev
+            while i < len(utr) and j < len(anti_rev):
+                energy += pair_energy(utr[i], anti_rev[j])
+                overlap += 1
+                i += 1
+                j += 1
+            if overlap >= min_overlap:
+                # normalize tiny short interactions less strongly
+                length_bonus = 0.85 + 0.15 * min(
+                    1.0, overlap / max(6, min(len(utr), len(anti_rev)))
+                )
+                best_energy = min(best_energy, energy * length_bonus)
+    return float(best_energy)
 
 
 def delta_g_duplex_whole_utr(utr: str, anti_sd: str) -> Tuple[float, str]:
     """
     Calculate dG duplex for the whole 5' UTR with anti-SD.
-    Uses ViennaRNA cofold only. No approximate scan fallback.
     """
-    return cofold_deltaG(utr, anti_sd), "ViennaRNA cofold"
+    real = cofold_deltaG(utr, anti_sd)
+    if real is not None:
+        return real, "ViennaRNA cofold"
+    return approximate_dG_duplex_whole_utr(utr, anti_sd), "approximate scan"
 
 
 def normalized_affinity_from_dG(dg: float, scale: float = 12.0) -> float:
@@ -543,12 +622,20 @@ def normalized_affinity_from_dG(dg: float, scale: float = 12.0) -> float:
 # Candidate construction and binding-site scanning
 # -------------------------
 
-def build_full_sequence(candidate: Dict[str, str], default_flank: str, default_cds_start: str) -> Tuple[str, str, str, str, int, int, int, int]:
+
+def build_full_sequence(
+    candidate: Dict[str, str], default_flank: str, default_cds_start: str
+) -> Tuple[str, str, str, str, int, int, int, int]:
     flank = normalize_rna(candidate.get("five_prime_flank", default_flank))
     rbs = normalize_rna(candidate.get("rbs", ""))
     spacer = normalize_rna(candidate.get("spacer", ""))
     cds = normalize_rna(candidate.get("cds_start", default_cds_start))
-    if not cds.startswith("AUG"):
+
+    VALID_START_CODONS = {"AUG", "GUG", "UUG", "CUG"}
+
+    start_codon = cds[:3]
+
+    if start_codon not in VALID_START_CODONS:
         cds = "AUG" + cds
 
     full_seq = flank + rbs + spacer + cds
@@ -615,17 +702,19 @@ def scan_binding_sites(
             aligned_spacing = (aug_start - mrna_start) - asd_start_5p
             d, spacing = dG_spacing_penalty(aligned_spacing)
 
-            raw.append({
-                "mrna_start": mrna_start,
-                "mrna_end": i,
-                "asd_start_5p": asd_start_5p,
-                "asd_end_5p_exclusive": asd_end_5p_exclusive,
-                "overlap": overlap,
-                "pairing_score": pairing_score,
-                "aligned_spacing": aligned_spacing,
-                "d": d,
-                "dG_spacing": spacing,
-            })
+            raw.append(
+                {
+                    "mrna_start": mrna_start,
+                    "mrna_end": i,
+                    "asd_start_5p": asd_start_5p,
+                    "asd_end_5p_exclusive": asd_end_5p_exclusive,
+                    "overlap": overlap,
+                    "pairing_score": pairing_score,
+                    "aligned_spacing": aligned_spacing,
+                    "d": d,
+                    "dG_spacing": spacing,
+                }
+            )
 
     # Sort by pairing quality, then spacing penalty; remove near-duplicates.
     raw.sort(key=lambda x: (x["pairing_score"], -x["dG_spacing"]), reverse=True)
@@ -674,7 +763,7 @@ def score_sites_for_asd(
     Returns:
       best_tir, best_dG_total, best_dG_spacing, best_dG_unfolding, site_results
     """
-    sites = scan_binding_sites(utr_seq, anti_sd, aug_start, min_overlap=4, max_sites=12)
+    sites = scan_binding_sites(utr_seq, anti_sd, aug_start, min_overlap=5, max_sites=12)
     if not sites:
         return 0.0, 999.0, float("nan"), float("nan"), []
 
@@ -688,20 +777,18 @@ def score_sites_for_asd(
         )
 
         dG_total_site = (
-            dG_duplex_candidate
-            + dG_start
-            + dG_standby
-            + site["dG_spacing"]
-            + dG_unfold
+            dG_duplex_candidate + dG_start + dG_standby + site["dG_spacing"] + dG_unfold
         )
         tir_site = calculate_tir(dG_total_site)
 
-        rows.append({
-            **site,
-            "dG_mrna_unfolding": dG_unfold,
-            "dG_total": dG_total_site,
-            "tir": tir_site,
-        })
+        rows.append(
+            {
+                **site,
+                "dG_mrna_unfolding": dG_unfold,
+                "dG_total": dG_total_site,
+                "tir": tir_site,
+            }
+        )
 
     rows.sort(key=lambda x: x["tir"], reverse=True)
     best = rows[0]
@@ -709,31 +796,33 @@ def score_sites_for_asd(
     site_results: List[BindingSiteResult] = []
     if collect_sites:
         for rank, site in enumerate(rows, 1):
-            site_results.append(BindingSiteResult(
-                candidate_id=candidate_id,
-                anti_sd_type=anti_sd_type,
-                site_rank=rank,
-                mrna_start_0based=site["mrna_start"],
-                mrna_end_0based_exclusive=site["mrna_end"],
-                mrna_start_1based=site["mrna_start"] + 1,
-                mrna_end_1based=site["mrna_end"],
-                asd_start_5p_0based=site["asd_start_5p"],
-                asd_start_5p_1based=site["asd_start_5p"] + 1,
-                asd_end_5p_0based_exclusive=site["asd_end_5p_exclusive"],
-                asd_end_5p_1based=site["asd_end_5p_exclusive"],
-                overlap=site["overlap"],
-                pairing_score=round(float(site["pairing_score"]), 4),
-                aligned_spacing=round(float(site["aligned_spacing"]), 4),
-                d=round(float(site["d"]), 4),
-                dG_spacing=round(float(site["dG_spacing"]), 4),
-                dG_mrna_unfolding=round(float(site["dG_mrna_unfolding"]), 4),
-                dG_duplex_candidate=round(float(dG_duplex_candidate), 4),
-                dG_start=round(float(dG_start), 4),
-                dG_standby=round(float(dG_standby), 4),
-                dG_total=round(float(site["dG_total"]), 4),
-                tir=float(site["tir"]),
-                is_best_site=(rank == 1),
-            ))
+            site_results.append(
+                BindingSiteResult(
+                    candidate_id=candidate_id,
+                    anti_sd_type=anti_sd_type,
+                    site_rank=rank,
+                    mrna_start_0based=site["mrna_start"],
+                    mrna_end_0based_exclusive=site["mrna_end"],
+                    mrna_start_1based=site["mrna_start"] + 1,
+                    mrna_end_1based=site["mrna_end"],
+                    asd_start_5p_0based=site["asd_start_5p"],
+                    asd_start_5p_1based=site["asd_start_5p"] + 1,
+                    asd_end_5p_0based_exclusive=site["asd_end_5p_exclusive"],
+                    asd_end_5p_1based=site["asd_end_5p_exclusive"],
+                    overlap=site["overlap"],
+                    pairing_score=round(float(site["pairing_score"]), 4),
+                    aligned_spacing=round(float(site["aligned_spacing"]), 4),
+                    d=round(float(site["d"]), 4),
+                    dG_spacing=round(float(site["dG_spacing"]), 4),
+                    dG_mrna_unfolding=round(float(site["dG_mrna_unfolding"]), 4),
+                    dG_duplex_candidate=round(float(dG_duplex_candidate), 4),
+                    dG_start=round(float(dG_start), 4),
+                    dG_standby=round(float(dG_standby), 4),
+                    dG_total=round(float(site["dG_total"]), 4),
+                    tir=float(site["tir"]),
+                    is_best_site=(rank == 1),
+                )
+            )
 
     return (
         float(best["tir"]),
@@ -766,8 +855,8 @@ def evaluate_candidate(
     """
     cid = str(candidate_id or candidate.get("id", f"cand_{random.randrange(10**9)}"))
 
-    full_seq, utr_seq, rbs, spacer, rbs_start, rbs_end, aug_start, aug_end = build_full_sequence(
-        candidate, default_flank, default_cds_start
+    full_seq, utr_seq, rbs, spacer, rbs_start, rbs_end, aug_start, aug_end = (
+        build_full_sequence(candidate, default_flank, default_cds_start)
     )
     flank = normalize_rna(candidate.get("five_prime_flank", default_flank))
     cds_start = normalize_rna(candidate.get("cds_start", default_cds_start))
@@ -776,13 +865,17 @@ def evaluate_candidate(
 
     structure, mfe, backend = fold_sequence(full_seq)
     rbs_access = accessibility_score(structure, rbs_start, rbs_end)
-    aug_access = accessibility_score(structure, max(0, aug_start - 3), min(len(full_seq), aug_end + 6))
+    aug_access = accessibility_score(
+        structure, max(0, aug_start - 3), min(len(full_seq), aug_end + 6)
+    )
 
     long_range_flag, long_range_pairs = rbs_long_range_interactions(
         structure, full_seq, rbs_start, rbs_end, LONG_RANGE_THRESHOLD_NT
     )
 
-    dG_duplex_orth, duplex_backend_orth = delta_g_duplex_whole_utr(utr_seq, orth_anti_sd)
+    dG_duplex_orth, duplex_backend_orth = delta_g_duplex_whole_utr(
+        utr_seq, orth_anti_sd
+    )
     dG_duplex_wt, _duplex_backend_wt = delta_g_duplex_whole_utr(utr_seq, wt_anti_sd)
 
     dG_start = dG_start_codon(full_seq[aug_start:aug_end])
@@ -791,17 +884,19 @@ def evaluate_candidate(
     dG_standby_wt = dG_standby(utr_seq, wt_anti_sd)
 
     # Orthogonal and WT TIR are calculated with the same binding-site logic.
-    orth_tir, dG_total_orth, best_dG_spacing, best_dG_unfold, orth_sites = score_sites_for_asd(
-        candidate_id=cid,
-        anti_sd_type="orthogonal",
-        full_seq=full_seq,
-        utr_seq=utr_seq,
-        anti_sd=orth_anti_sd,
-        aug_start=aug_start,
-        dG_duplex_candidate=dG_duplex_orth,
-        dG_start=dG_start,
-        dG_standby=dG_standby_orth,
-        collect_sites=True,
+    orth_tir, dG_total_orth, best_dG_spacing, best_dG_unfold, orth_sites = (
+        score_sites_for_asd(
+            candidate_id=cid,
+            anti_sd_type="orthogonal",
+            full_seq=full_seq,
+            utr_seq=utr_seq,
+            anti_sd=orth_anti_sd,
+            aug_start=aug_start,
+            dG_duplex_candidate=dG_duplex_orth,
+            dG_start=dG_start,
+            dG_standby=dG_standby_orth,
+            collect_sites=True,
+        )
     )
 
     wt_tir, dG_total_wt, _wt_spacing, _wt_unfold, wt_sites = score_sites_for_asd(
@@ -822,11 +917,21 @@ def evaluate_candidate(
     t_score = orth_tir - wt_penalty_constant * wt_tir
     fitness_for_selection = signed_log10_score(t_score)
 
-    # Long-range RBS interactions are a hard filter for ranking.
-    # No categorical status labels are produced; candidates are ranked only by scores.
-    if long_range_flag or not orth_sites:
-        fitness_for_selection = -1e9
-        t_score = -1e9
+    if long_range_flag:
+        fitness_for_selection -= 5.0
+        status = "Rejected: long-range RBS interaction"
+    elif not orth_sites:
+        status = "Rejected: no orthogonal binding sites"
+    elif orth_tir <= 1e-6:
+        status = "Weak"
+    elif wt_tir > orth_tir:
+        status = "Leaky"
+    else:
+        status = (
+            "Strong"
+            if fitness_for_selection > 4
+            else "Good" if fitness_for_selection > 2 else "Moderate"
+        )
 
     # Dashboard-friendly normalized-ish scores.
     orthScore = normalized_affinity_from_dG(dG_duplex_orth)
@@ -855,8 +960,16 @@ def evaluate_candidate(
         dG_duplex_wt=round(float(dG_duplex_wt), 4),
         dG_start=round(float(dG_start), 4),
         dG_standby=round(float(dG_standby_orth), 4),
-        best_dG_spacing=round(float(best_dG_spacing), 4) if not math.isnan(best_dG_spacing) else float("nan"),
-        best_dG_mrna_unfolding=round(float(best_dG_unfold), 4) if not math.isnan(best_dG_unfold) else float("nan"),
+        best_dG_spacing=(
+            round(float(best_dG_spacing), 4)
+            if not math.isnan(best_dG_spacing)
+            else float("nan")
+        ),
+        best_dG_mrna_unfolding=(
+            round(float(best_dG_unfold), 4)
+            if not math.isnan(best_dG_unfold)
+            else float("nan")
+        ),
         dG_total=round(float(dG_total_orth), 4),
         orth_tir=float(orth_tir),
         wt_tir=float(wt_tir),
@@ -865,6 +978,7 @@ def evaluate_candidate(
         orthScore=round(float(orthScore), 4),
         wtLeakage=round(float(wtLeakage), 4),
         fitness=0.0,  # filled after normalization across final output
+        status=status,
     )
 
     return eval_obj, site_results
@@ -874,7 +988,10 @@ def evaluate_candidate(
 # GA operators
 # -------------------------
 
-def mutate_candidate(candidate: Dict[str, str], mutate_flank: bool = True) -> Dict[str, str]:
+
+def mutate_candidate(
+    candidate: Dict[str, str], mutate_flank: bool = True
+) -> Dict[str, str]:
     """
     Mutates only 5' flank/RBS/spacer.
     Does not mutate AUG/CDS.
@@ -884,7 +1001,16 @@ def mutate_candidate(candidate: Dict[str, str], mutate_flank: bool = True) -> Di
     rbs = list(normalize_rna(new.get("rbs", "")))
     spacer = list(normalize_rna(new.get("spacer", "")))
 
-    ops = ["rbs_sub", "rbs_sub", "spacer_sub", "spacer_sub", "spacer_insert", "spacer_delete", "rbs_insert", "rbs_delete"]
+    ops = [
+        "rbs_sub",
+        "rbs_sub",
+        "spacer_sub",
+        "spacer_sub",
+        "spacer_insert",
+        "spacer_delete",
+        "rbs_insert",
+        "rbs_delete",
+    ]
     if mutate_flank:
         ops.extend(["flank_sub", "flank_sub"])
     op = random.choice(ops)
@@ -922,7 +1048,12 @@ def crossover(a: Dict[str, str], b: Dict[str, str]) -> Dict[str, str]:
     Modular crossover between two candidates.
     """
     child = {}
-    child["five_prime_flank"] = random.choice([a.get("five_prime_flank", DEFAULT_FLANK), b.get("five_prime_flank", DEFAULT_FLANK)])
+    child["five_prime_flank"] = random.choice(
+        [
+            a.get("five_prime_flank", DEFAULT_FLANK),
+            b.get("five_prime_flank", DEFAULT_FLANK),
+        ]
+    )
     child["rbs"] = random.choice([a.get("rbs", ""), b.get("rbs", "")])
     child["spacer"] = random.choice([a.get("spacer", ""), b.get("spacer", "")])
     # CDS usually global/fixed; keep parent A if present.
@@ -938,7 +1069,7 @@ def generate_guided_seed_candidates(
     default_cds_start: str = DEFAULT_CDS_START,
 ) -> List[Dict[str, str]]:
     """
-    Built-in guided seed generator in case friend's seeds are too few.
+    Built-in fallback seed generator in case friend's seeds are too few.
     """
     core = reverse_complement(orth_anti_sd)
     seeds = set()
@@ -948,13 +1079,15 @@ def generate_guided_seed_candidates(
     # windows
     for length in range(5, min(10, len(core)) + 1):
         for start in range(0, len(core) - length + 1):
-            seeds.add(core[start:start+length])
+            seeds.add(core[start : start + length])
 
     seeds = {s for s in seeds if 4 <= len(s) <= 12}
     seed_list = list(seeds) if seeds else ["UACAAG"]
 
     def random_spacer(length: int) -> str:
-        return "".join(random.choice(["A", "U", "A", "U", "G", "C"]) for _ in range(length))
+        return "".join(
+            random.choice(["A", "U", "A", "U", "G", "C"]) for _ in range(length)
+        )
 
     out = []
     while len(out) < n:
@@ -965,19 +1098,22 @@ def generate_guided_seed_candidates(
                 i = random.randrange(len(rbs))
                 rbs[i] = random.choice([b for b in BASES if b != rbs[i]])
         spacer = random_spacer(random.randint(4, 12))
-        out.append({
-            "five_prime_flank": normalize_rna(default_flank),
-            "rbs": "".join(rbs),
-            "spacer": spacer,
-            "cds_start": normalize_rna(default_cds_start),
-            "source": "guided_seed",
-        })
+        out.append(
+            {
+                "five_prime_flank": normalize_rna(default_flank),
+                "rbs": "".join(rbs),
+                "spacer": spacer,
+                "cds_start": normalize_rna(default_cds_start),
+                "source": "guided_seed",
+            }
+        )
     return out
 
 
 # -------------------------
 # GA main loop
 # -------------------------
+
 
 def _eval_worker(args: Tuple) -> Tuple[CandidateEval, List[BindingSiteResult]]:
     ind, orth_anti_sd, wt_anti_sd, default_flank, default_cds_start, wt_penalty_constant, cid = args
@@ -1004,7 +1140,12 @@ def run_ga(
     wt_penalty_constant: float = DEFAULT_WT_PENALTY_CONSTANT,
     seed: int = 7,
     max_workers: Optional[int] = None,
-) -> Tuple[List[CandidateEval], List[Dict[str, Any]], List[BindingSiteResult], List[Dict[str, str]]]:
+) -> Tuple[
+    List[CandidateEval],
+    List[Dict[str, Any]],
+    List[BindingSiteResult],
+    List[Dict[str, str]],
+]:
     """
     Returns:
         final_ranked_candidates,
@@ -1019,20 +1160,29 @@ def run_ga(
     # Normalize/fill initial population.
     population: List[Dict[str, str]] = []
     for i, c in enumerate(initial_candidates or []):
-        population.append({
-            "id": str(c.get("id", f"seed_{i+1:04d}")),
-            "five_prime_flank": normalize_rna(c.get("five_prime_flank", default_flank)),
-            "rbs": normalize_rna(c.get("rbs", "")),
-            "spacer": normalize_rna(c.get("spacer", "")),
-            "cds_start": normalize_rna(c.get("cds_start", default_cds_start)),
-            "source": c.get("source", "friend_seed"),
-        })
+        population.append(
+            {
+                "id": str(c.get("id", f"seed_{i+1:04d}")),
+                "five_prime_flank": normalize_rna(
+                    c.get("five_prime_flank", default_flank)
+                ),
+                "rbs": normalize_rna(c.get("rbs", "")),
+                "spacer": normalize_rna(c.get("spacer", "")),
+                "cds_start": normalize_rna(c.get("cds_start", default_cds_start)),
+                "source": c.get("source", "friend_seed"),
+            }
+        )
 
     if len(population) < population_size:
         needed = population_size - len(population)
-        population.extend(generate_guided_seed_candidates(
-            orth_anti_sd, needed, default_flank=default_flank, default_cds_start=default_cds_start
-        ))
+        population.extend(
+            generate_guided_seed_candidates(
+                orth_anti_sd,
+                needed,
+                default_flank=default_flank,
+                default_cds_start=default_cds_start,
+            )
+        )
 
     random.shuffle(population)
     population = population[:population_size]
@@ -1066,7 +1216,11 @@ def run_ga(
                 all_binding_sites.extend(sites)
 
                 key = (ev.five_prime_flank, ev.rbs, ev.spacer)
-                if key not in all_evals_by_key or ev.fitness_for_selection > all_evals_by_key[key].fitness_for_selection:
+                if (
+                    key not in all_evals_by_key
+                    or ev.fitness_for_selection
+                    > all_evals_by_key[key].fitness_for_selection
+                ):
                     all_evals_by_key[key] = ev
 
             scored.sort(key=lambda x: x[0].fitness_for_selection, reverse=True)
@@ -1075,15 +1229,18 @@ def run_ga(
             avg_score = sum(e.fitness_for_selection for e in evals) / max(1, len(evals))
             avg_tir = sum(e.orth_tir for e in evals) / max(1, len(evals))
 
-            history.append({
-                "generation": gen,
-                "best": best.fitness_for_selection,
-                "avg": avg_score,
-                "bestTIR": best.orth_tir,
-                "avgTIR": avg_tir,
-                "bestWT": best.wt_tir,
-                "bestRBSAccess": best.rbs_access,
-            })
+            history.append(
+                {
+                    "generation": gen,
+                    "best": best.fitness_for_selection,
+                    "avg": avg_score,
+                    "bestTIR": best.orth_tir,
+                    "avgTIR": avg_tir,
+                    "bestWT": best.wt_tir,
+                    "bestRBSAccess": best.rbs_access,
+                    "bestStatus": best.status,
+                }
+            )
 
             # Select elites.
             elite_count = max(4, int(population_size * elite_fraction))
@@ -1112,7 +1269,12 @@ def run_ga(
     final_evals.sort(key=lambda e: e.fitness_for_selection, reverse=True)
 
     # Normalize dashboard fitness 0-1 based on final eval range.
-    finite_scores = [e.fitness_for_selection for e in final_evals if not math.isinf(e.fitness_for_selection) and not math.isnan(e.fitness_for_selection)]
+    finite_scores = [
+        e.fitness_for_selection
+        for e in final_evals
+        if not math.isinf(e.fitness_for_selection)
+        and not math.isnan(e.fitness_for_selection)
+    ]
     if finite_scores:
         lo, hi = min(finite_scores), max(finite_scores)
     else:
@@ -1146,6 +1308,7 @@ def run_ga(
 # Input/output adapters
 # -------------------------
 
+
 def load_initial_candidates(path: Optional[str]) -> List[Dict[str, str]]:
     """
     Load friend's candidates from JSON or CSV.
@@ -1168,7 +1331,9 @@ def load_initial_candidates(path: Optional[str]) -> List[Dict[str, str]]:
             return data
         if isinstance(data, dict):
             return data.get("candidates", [])
-        raise ValueError("JSON input must be a list or an object with a 'candidates' key.")
+        raise ValueError(
+            "JSON input must be a list or an object with a 'candidates' key."
+        )
 
     if p.suffix.lower() == ".csv":
         out: List[Dict[str, str]] = []
@@ -1195,7 +1360,6 @@ def candidate_to_dashboard_dict(e: CandidateEval) -> Dict[str, Any]:
         "rbsAccess": f"{e.rbs_access:.3f}",
         "fitness": f"{e.fitness:.3f}",
         "structure": e.structure,
-
         # New thermodynamic fields
         "candidateId": e.candidate_id,
         "fivePrimeFlank": e.five_prime_flank,
@@ -1212,6 +1376,7 @@ def candidate_to_dashboard_dict(e: CandidateEval) -> Dict[str, Any]:
         "orthTIR": e.orth_tir,
         "wtTIR": e.wt_tir,
         "tScore": e.t_score,
+        "status": e.status,
         "backend": e.backend,
     }
 
@@ -1227,10 +1392,7 @@ def build_dashboard_dataset(
     best_ids = {e.candidate_id for e in top[:5]}
 
     # only include top candidate sites in JSON to avoid huge payload
-    site_payload = [
-        asdict(s) for s in binding_sites
-        if s.candidate_id in best_ids
-    ]
+    site_payload = [asdict(s) for s in binding_sites if s.candidate_id in best_ids]
 
     return {
         "inputs": {
@@ -1238,7 +1400,9 @@ def build_dashboard_dataset(
             "wtAntiSD": inputs.get("wtAntiSD", DEFAULT_WT_ASD),
             "cdsStart": inputs.get("cdsStart", DEFAULT_CDS_START),
             "targetExpression": inputs.get("targetExpression", "High"),
-            "wtPenaltyConstant": inputs.get("wtPenaltyConstant", DEFAULT_WT_PENALTY_CONSTANT),
+            "wtPenaltyConstant": inputs.get(
+                "wtPenaltyConstant", DEFAULT_WT_PENALTY_CONSTANT
+            ),
         },
         "candidates": [candidate_to_dashboard_dict(e) for e in top],
         "fitnessData": [
@@ -1255,15 +1419,15 @@ def build_dashboard_dataset(
         ],
         "scatterPoints": [
             {
-                "id": idx,
                 "wtLeakage": max(1e-8, e.wt_tir),
                 "binding": e.orth_tir,
                 "access": e.rbs_access,
                 "rbs": e.rbs,
                 "spacer": e.spacer,
                 "fitness": e.fitness,
+                "status": e.status,
             }
-            for idx, e in enumerate(top)
+            for e in top
         ],
         "bindingSites": site_payload,
     }
@@ -1300,15 +1464,15 @@ def write_outputs(
     # Landscape CSV, React-style
     landscape_rows = [
         {
-            "id": idx,
             "wtLeakage": max(1e-8, e.wt_tir),
             "binding": e.orth_tir,
             "access": e.rbs_access,
             "rbs": e.rbs,
             "spacer": e.spacer,
             "fitness": e.fitness,
+            "status": e.status,
         }
-        for idx, e in enumerate(evals)
+        for e in evals
     ]
     if landscape_rows:
         with (out / "landscape.csv").open("w", newline="") as f:
@@ -1329,10 +1493,17 @@ def write_outputs(
 # CLI
 # -------------------------
 
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="RiboGuard GA engine: initial candidates -> optimized RBS/spacer outputs")
-    parser.add_argument("--seeds", type=str, default=None, help="Friend's initial candidates JSON/CSV")
-    parser.add_argument("--out", type=str, default="riboguard_outputs", help="Output directory")
+    parser = argparse.ArgumentParser(
+        description="RiboGuard GA engine: initial candidates -> optimized RBS/spacer outputs"
+    )
+    parser.add_argument(
+        "--seeds", type=str, default=None, help="Friend's initial candidates JSON/CSV"
+    )
+    parser.add_argument(
+        "--out", type=str, default="riboguard_outputs", help="Output directory"
+    )
     parser.add_argument("--orth-asd", type=str, default=DEFAULT_ORTH_ASD)
     parser.add_argument("--wt-asd", type=str, default=DEFAULT_WT_ASD)
     parser.add_argument("--flank", type=str, default=DEFAULT_FLANK)
@@ -1385,6 +1556,7 @@ def main() -> None:
         print(f"  Orth TIR: {best.orth_tir:.4g}")
         print(f"  WT TIR: {best.wt_tir:.4g}")
         print(f"  T-score: {best.t_score:.4g}")
+        print(f"  Status: {best.status}")
 
 
 if __name__ == "__main__":
