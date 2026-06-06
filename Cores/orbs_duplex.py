@@ -2,9 +2,13 @@
 """
 orbs_duplex.py
 
-Scan an input RNA transcript for the strongest self-complementary o-RBS
+Scans an input RNA transcript for the strongest self-complementary o-RBS
 candidate, print the scan results, and write the best merged hit and core hit
 to a standardized JSON file as <gene>_rbs_core.json.
+
+Use (json output in query_20260606_184002_rbs_core.json)
+python3 orbs_duplex.py --fasta Tv3test.fa --mrna5 AAAAACAAAAA --mrna3 UUUUUUGUUUUUU
+
 """
 
 from __future__ import annotations
@@ -162,35 +166,63 @@ def merge_top_hits(hits: list[WindowHit], source_seq: str, source_start: int, te
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Identify and export the best o-RBS candidate as JSON.")
-    source = parser.add_mutually_exclusive_group(required=True)
-    #fixed/unused arguments (to be removed/replaced in future edits)
+
+    # fixed/unused arguments (to be removed/replaced in future edits)
     parser.add_argument("--asd-start", type=int, help="1-based start of the ASD search region.")
     parser.add_argument("--asd-end", type=int, help="1-based end of the ASD search region.")
     parser.add_argument("--output-dir", default=".", help="Directory where the <gene>_rbs_core.json file is written.")
-    source.add_argument("--fasta", help="Input transcript FASTA file.")
 
-    #customizable arguments (with defaults)
+    # o-RBS input: exactly one of --fasta or --sequence (mutually exclusive)
+    orbs_source = parser.add_mutually_exclusive_group(required=True)
+    orbs_source.add_argument("--fasta", help="o-RBS transcript input as a FASTA file.")
+    orbs_source.add_argument("--sequence", help="o-RBS transcript input as a raw RNA/DNA sequence.")
+
+    # flanking mRNA fragments: raw sequence or FASTA, mutually exclusive per flank
+    mrna5_source = parser.add_mutually_exclusive_group(required=True)
+    mrna5_source.add_argument("--mrna5", help="5' mRNA fragment upstream of the RBS; raw sequence.")
+    mrna5_source.add_argument("--mrna5-fasta", help="5' mRNA fragment upstream of the RBS; FASTA file.")
+
+    mrna3_source = parser.add_mutually_exclusive_group(required=True)
+    mrna3_source.add_argument("--mrna3", help="3' mRNA fragment downstream of the RBS (CDS start); raw sequence.")
+    mrna3_source.add_argument("--mrna3-fasta", help="3' mRNA fragment downstream of the RBS (CDS start); FASTA file.")
+
+    # canonical RBS input: raw sequence or FASTA, mutually exclusive
+    crbs_source = parser.add_mutually_exclusive_group()  # not required
+    crbs_source.add_argument("--canonical-rbs", default="AUUCCUCCACUAG", help="Canonical RBS sequence; raw sequence.")
+    crbs_source.add_argument("--canonical-rbs-fasta", help="Canonical RBS sequence; FASTA file.")
+
+    # customizable arguments (with defaults)
     parser.add_argument("--asd-tail-nt", type=int, default=DEFAULT_ASD_TAIL_NT)
     parser.add_argument("--window-k", type=int, default=DEFAULT_WINDOW_K)
     parser.add_argument("--temp", type=float, default=DEFAULT_TEMP)
-    parser.add_argument("--name", default=DEFAULT_NAME, help="Gene name used for FASTA output when --sequence is provided.")
-    source.add_argument("--sequence", default="AUAUGUUCACUA", help="Input transcript RNA/DNA sequence.")
+    parser.add_argument("--name", default=DEFAULT_NAME, help="Gene name used for output naming.")
 
-    #customizable arguments (required)
-    parser.add_argument("--mrna5", required=True, help="mRNA fragment upstream of the RBS; FASTA path or raw sequence.")
-    parser.add_argument("--mrna3", required=True, help="mRNA fragment downstream of the RBS; FASTA path or raw sequence.")
     return parser
 
 
 def main() -> None:
     args = build_parser().parse_args()
+
+    # resolve o-RBS transcript
     full_seq, inferred_name = resolve_input_sequence(args.sequence, args.fasta)
 
-    mrna5 = normalize_rna(args.mrna5)
-    mrna3 = normalize_rna(args.mrna3)   
+    # resolve 5' mRNA flank
+    if args.mrna5_fasta:
+        _, mrna5 = load_fasta_sequence(args.mrna5_fasta, to_rna=True)
+    else:
+        mrna5 = normalize_rna(args.mrna5)
 
-    if args.sequence and not args.name:
-        raise SystemExit("--name is required when --sequence is used.")
+    # resolve 3' mRNA flank
+    if args.mrna3_fasta:
+        _, mrna3 = load_fasta_sequence(args.mrna3_fasta, to_rna=True)
+    else:
+        mrna3 = normalize_rna(args.mrna3)
+
+    # resolve canonical RBS
+    if args.canonical_rbs_fasta:
+        _, canonical_rbs = load_fasta_sequence(args.canonical_rbs_fasta, to_rna=True)
+    else:
+        canonical_rbs = normalize_rna(args.canonical_rbs)
 
     gene_name = sanitize_name(args.name or inferred_name)
 
@@ -223,7 +255,8 @@ def main() -> None:
         candidate = {
             "name": gene_name,
             "five_prime_flank": mrna5,
-            "rbs": revcomp_rna(full_seq),
+            "canonical_rbs": canonical_rbs,
+            "rbs": revcomp_rna(best.subseq),
             "core": revcomp_rna(core.subseq),
             "spacer": "",
             "cds_start": mrna3,
