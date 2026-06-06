@@ -4,7 +4,7 @@
 ###### By [@PaulVerot03](https://github.com/PaulVerot03),  [@VoxelMC](https://github.com/VoxelMC), [@cuajiniquil](https://github.com/cuajiniquil), [@ritar18](https://github.com/ritar18), [@georgyzaouk](https://github.com/georgyzaouk), [@serenapandzou](https://github.com/serenapandzou), [@talissakassably](https://github.com/talissakassably) & [@crakshay1](https://github.com/crakshay1)
 
 -----------------------------------------------------
-**DalGuardYES** is a computational framework developed to design and evaluate ribosome binding site (RBS) architectures tailored to orthogonal ribosomes with engineered anti–Shine-Dalgarno sequences. By explicitly accounting for non-native mRNA–ribosome interactions, it enables systematic exploration of RBS and spacer combinations that maximize translation efficiency while preserving orthogonality. This tool supports the rational design of synthetic translation systems by linking sequence design to predicted ribosome recruitment performance.
+**DalGuardYES** designs orthogonal ribosome binding sites from a user-defined anti-Shine-Dalgarno sequence. Unlike standard RBS calculators, which evaluate natural ribosome systems, our model performs inverse design: it searches possible RBS motifs and spacer lengths to find sequences that maximize recognition by the engineered ribosome while minimizing recognition by the endogenous ones.
 
 #### [Presenting DalGuardYES: Computational design of RBS for orthogonal anti–Shine-Dalgarno ribosomes. (Slides only)](aaaaaaaaa)
 -------
