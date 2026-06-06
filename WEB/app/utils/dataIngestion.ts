@@ -14,14 +14,7 @@ export interface CandidateData {
   orthScore: string;
   wtLeakage: string;
   rbsAccess: string;
-  fitness: string;
   structure: string;
-}
-
-export interface FitnessDataPoint {
-  generation: number;
-  best: number;
-  avg: number;
 }
 
 export interface ScatterDataPoint {
@@ -36,18 +29,19 @@ export interface DashboardInputData {
   wtAntiSD?: string;
   cdsStart?: string;
   targetExpression?: string;
+  antiSD?: string;
+  beforeRBS?: string;
+  afterRBS?: string;
 }
 
 export interface DashboardJSONResult {
   inputs?: DashboardInputData;
   candidates?: CandidateData[];
-  fitnessData?: FitnessDataPoint[];
   scatterPoints?: ScatterDataPoint[];
 }
 
 export type CSVIngestionType =
   | { type: "candidates"; data: CandidateData[] }
-  | { type: "fitness"; data: FitnessDataPoint[] }
   | { type: "scatter"; data: ScatterDataPoint[] }
   | { type: "unknown"; headers: string[] };
 
@@ -106,19 +100,9 @@ export function ingestCSV(text: string): CSVIngestionType {
       orthScore: row.orthscore || row["orth score"] || "0.0",
       wtLeakage: row.wtleakage || row["wt leakage"] || "0.0",
       rbsAccess: row.rbsaccess || row["rbs access"] || "0.0",
-      fitness: row.fitness || "0.0",
       structure: row.structure || ".".repeat((row.rbs || "").length + (row.spacer || "").length + 10),
     }));
     return { type: "candidates", data };
-  }
-
-  if (headers.includes("generation") && (headers.includes("best") || headers.includes("avg") || headers.includes("average"))) {
-    const data: FitnessDataPoint[] = rows.map((row) => ({
-      generation: parseInt(row.generation) || 0,
-      best: parseFloat(row.best) || 0,
-      avg: parseFloat(row.avg) || parseFloat(row.average) || 0,
-    })).sort((a, b) => a.generation - b.generation);
-    return { type: "fitness", data };
   }
 
   if (headers.includes("wtleakage") || headers.includes("wt leakage") || headers.includes("binding") || headers.includes("orthogonal binding")) {

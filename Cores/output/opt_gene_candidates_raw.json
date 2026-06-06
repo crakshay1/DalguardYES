@@ -1,0 +1,1202 @@
+[
+  {
+    "name": "opt_gene_c0001",
+    "five_prime_flank": "CGCAAUCUCGCU",
+    "rbs": "GCGA",
+    "spacer": "CCGUUGC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0002",
+    "five_prime_flank": "ACCGGGCAACGA",
+    "rbs": "GCGA",
+    "spacer": "AUACCG",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0003",
+    "five_prime_flank": "AAGUUACUCAUG",
+    "rbs": "GCGA",
+    "spacer": "CAAGUAU",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0004",
+    "five_prime_flank": "CUCUCCGUUUCU",
+    "rbs": "GCGA",
+    "spacer": "GGGC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0005",
+    "five_prime_flank": "GUCGCGCUUUAC",
+    "rbs": "GCGA",
+    "spacer": "CACGAG",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0006",
+    "five_prime_flank": "AUCGUUUACUCU",
+    "rbs": "GCGA",
+    "spacer": "AAUC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0007",
+    "five_prime_flank": "UUCUGAUUCACG",
+    "rbs": "GCGA",
+    "spacer": "GACG",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0008",
+    "five_prime_flank": "UUUGCUAUCUGU",
+    "rbs": "GCGA",
+    "spacer": "CCAUC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0009",
+    "five_prime_flank": "UUAUGUCAUUCU",
+    "rbs": "GCGA",
+    "spacer": "UAUACUU",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0010",
+    "five_prime_flank": "UAUUCUAUCAUA",
+    "rbs": "GCGA",
+    "spacer": "AUGC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0011",
+    "five_prime_flank": "GACUCUUGUUGU",
+    "rbs": "GCGA",
+    "spacer": "GAUGUGC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0012",
+    "five_prime_flank": "AUCUAAGUCUGC",
+    "rbs": "GCGA",
+    "spacer": "GUGUC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0013",
+    "five_prime_flank": "GAAAGAUGGGAA",
+    "rbs": "GCGA",
+    "spacer": "CACU",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0014",
+    "five_prime_flank": "CAAUUGCCAUCC",
+    "rbs": "GCGA",
+    "spacer": "CCCUA",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0015",
+    "five_prime_flank": "CGAUGGCACUCC",
+    "rbs": "GCGA",
+    "spacer": "UCCAGU",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0016",
+    "five_prime_flank": "AUAUCGCCGCUU",
+    "rbs": "GCGA",
+    "spacer": "AUGGG",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0017",
+    "five_prime_flank": "UUCACACUCUUC",
+    "rbs": "GCGA",
+    "spacer": "UCCAC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0018",
+    "five_prime_flank": "CUAUUUUUCCCU",
+    "rbs": "GCGA",
+    "spacer": "CCUGGUA",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0019",
+    "five_prime_flank": "UGUUGCGCGCAU",
+    "rbs": "GCGA",
+    "spacer": "CAAAGCG",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0020",
+    "five_prime_flank": "UACAAUCGCGUG",
+    "rbs": "GCGA",
+    "spacer": "UCGGAAA",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0021",
+    "five_prime_flank": "AUUUAUGAUUCU",
+    "rbs": "GCGA",
+    "spacer": "GCAGAUC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0022",
+    "five_prime_flank": "AGGAACUUAUCU",
+    "rbs": "GCGA",
+    "spacer": "CUGGAC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0023",
+    "five_prime_flank": "CCGGCCAGCCCA",
+    "rbs": "GCGA",
+    "spacer": "AGCAUAU",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0024",
+    "five_prime_flank": "CUCCCCCAUUAU",
+    "rbs": "GCGA",
+    "spacer": "AAGGA",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0025",
+    "five_prime_flank": "CACCAGCUUACG",
+    "rbs": "GCGA",
+    "spacer": "AGACG",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0026",
+    "five_prime_flank": "AACUAGCUCCGU",
+    "rbs": "GCGA",
+    "spacer": "ACAUC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0027",
+    "five_prime_flank": "CCAUCUCUAUUA",
+    "rbs": "GCGA",
+    "spacer": "UGGUCC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0028",
+    "five_prime_flank": "CUGACCCACUCG",
+    "rbs": "GCGA",
+    "spacer": "GCCUUA",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0029",
+    "five_prime_flank": "CGCACUCUCUCA",
+    "rbs": "GCGA",
+    "spacer": "GAGUA",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0030",
+    "five_prime_flank": "UGCCAUAUCAUA",
+    "rbs": "GCGA",
+    "spacer": "GGGUCUG",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0031",
+    "five_prime_flank": "UGUUCUCUGUCU",
+    "rbs": "GCGA",
+    "spacer": "CAUA",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0032",
+    "five_prime_flank": "ACGCCAAAGUUC",
+    "rbs": "GCGA",
+    "spacer": "GUGGGCC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0033",
+    "five_prime_flank": "AUCGCUCUCGCU",
+    "rbs": "GCGA",
+    "spacer": "AUGGU",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0034",
+    "five_prime_flank": "CUCACCGUAGCU",
+    "rbs": "GCGA",
+    "spacer": "GGUAC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0035",
+    "five_prime_flank": "CAUUCUAUGAAA",
+    "rbs": "GCGA",
+    "spacer": "GUACUG",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0036",
+    "five_prime_flank": "AACUCACUCUUA",
+    "rbs": "GCGA",
+    "spacer": "CUAUUGU",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0037",
+    "five_prime_flank": "AAACCUUACAUU",
+    "rbs": "GCGA",
+    "spacer": "ACGAG",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0038",
+    "five_prime_flank": "CACUCUCGCACA",
+    "rbs": "GCGA",
+    "spacer": "GCGUC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0039",
+    "five_prime_flank": "UUCAACCGUUCU",
+    "rbs": "GCGA",
+    "spacer": "AACU",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0040",
+    "five_prime_flank": "CUGUCACGGUUU",
+    "rbs": "GCGA",
+    "spacer": "AGCCACU",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0041",
+    "five_prime_flank": "AUCUCCCUCGUU",
+    "rbs": "GCGA",
+    "spacer": "CGGUCU",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0042",
+    "five_prime_flank": "CUCUGUAGACUU",
+    "rbs": "GCGA",
+    "spacer": "GCCAACG",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0043",
+    "five_prime_flank": "ACAUCUUAGAAA",
+    "rbs": "GCGA",
+    "spacer": "UACG",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0044",
+    "five_prime_flank": "UACAGUCACGGG",
+    "rbs": "GCGA",
+    "spacer": "AGCGA",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0045",
+    "five_prime_flank": "GUGUCUCUCAUU",
+    "rbs": "GCGA",
+    "spacer": "AGGAGG",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0046",
+    "five_prime_flank": "GCCACUCUUACA",
+    "rbs": "GCGA",
+    "spacer": "GGCAGCA",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0047",
+    "five_prime_flank": "GCCACUCUUUGC",
+    "rbs": "GCGA",
+    "spacer": "GUCGU",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0048",
+    "five_prime_flank": "UGCUGUCUAGCU",
+    "rbs": "GCGA",
+    "spacer": "AACACC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0049",
+    "five_prime_flank": "GUAUUCCCUACA",
+    "rbs": "GCGA",
+    "spacer": "UCUCAU",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0050",
+    "five_prime_flank": "CCAUACUUAUCU",
+    "rbs": "GCGA",
+    "spacer": "UUCCUGC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0051",
+    "five_prime_flank": "AGUAUUGCGCGC",
+    "rbs": "GCGA",
+    "spacer": "UGUCGC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0052",
+    "five_prime_flank": "AUAUCUCACGCA",
+    "rbs": "GCGA",
+    "spacer": "GAAC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0053",
+    "five_prime_flank": "AUUGGUCGAUCG",
+    "rbs": "GCGA",
+    "spacer": "AUACGAG",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0054",
+    "five_prime_flank": "CUCAGUCGCAGA",
+    "rbs": "GCGA",
+    "spacer": "CGAGUA",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0055",
+    "five_prime_flank": "GGUUAUCCCUAA",
+    "rbs": "GCGA",
+    "spacer": "UAUGGG",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0056",
+    "five_prime_flank": "GGUGUUGUCUGU",
+    "rbs": "GCGA",
+    "spacer": "GAUGCGC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0057",
+    "five_prime_flank": "UGAUAGCUUUGU",
+    "rbs": "GCGA",
+    "spacer": "AAAG",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0058",
+    "five_prime_flank": "AAGUUUAGAUCU",
+    "rbs": "GCGA",
+    "spacer": "GAAGUUU",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0059",
+    "five_prime_flank": "GUGUGCUUAAAA",
+    "rbs": "GCGA",
+    "spacer": "ACGCC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0060",
+    "five_prime_flank": "CGCUCUAGAUAU",
+    "rbs": "GCGA",
+    "spacer": "AAGUC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0061",
+    "five_prime_flank": "GUAACUCUUUCC",
+    "rbs": "GCGA",
+    "spacer": "UGGACUU",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0062",
+    "five_prime_flank": "GUCUCUUUCUGU",
+    "rbs": "GCGA",
+    "spacer": "CACGGGA",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0063",
+    "five_prime_flank": "UCCCCACGUUGA",
+    "rbs": "GCGA",
+    "spacer": "GUGUCU",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0064",
+    "five_prime_flank": "CCAUCUCUUGAU",
+    "rbs": "GCGA",
+    "spacer": "UGUUA",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0065",
+    "five_prime_flank": "AGCUGCAUACCU",
+    "rbs": "GCGA",
+    "spacer": "CCAC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0066",
+    "five_prime_flank": "CUCCCCUUCGCA",
+    "rbs": "GCGA",
+    "spacer": "CUAU",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0067",
+    "five_prime_flank": "AGCCCUAUCGAU",
+    "rbs": "GCGA",
+    "spacer": "GAUCAG",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0068",
+    "five_prime_flank": "CACCACCACUCG",
+    "rbs": "GCGA",
+    "spacer": "CUCC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0069",
+    "five_prime_flank": "UUUGCUCUCUCA",
+    "rbs": "GCGA",
+    "spacer": "GCGACG",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0070",
+    "five_prime_flank": "UGGAUUUUUAUU",
+    "rbs": "GCGA",
+    "spacer": "AGUA",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0071",
+    "five_prime_flank": "CGAUCUCUCCAA",
+    "rbs": "GCGA",
+    "spacer": "ACGA",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0072",
+    "five_prime_flank": "GUAGAUCUGUUU",
+    "rbs": "GCGA",
+    "spacer": "AUCA",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0073",
+    "five_prime_flank": "CAGGUUGUGUUG",
+    "rbs": "GCGA",
+    "spacer": "UUCACCG",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0074",
+    "five_prime_flank": "CUACGUCUAUGA",
+    "rbs": "GCGA",
+    "spacer": "AGCCAAA",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0075",
+    "five_prime_flank": "GUGCCACUAUGA",
+    "rbs": "GCGA",
+    "spacer": "ACUCUA",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0076",
+    "five_prime_flank": "GGUUCUCGGAUU",
+    "rbs": "GCGA",
+    "spacer": "CCGC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0077",
+    "five_prime_flank": "CUCGAUUUUUAA",
+    "rbs": "GCGA",
+    "spacer": "GAAU",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0078",
+    "five_prime_flank": "CCCUGAUAGUCA",
+    "rbs": "GCGA",
+    "spacer": "CUCC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0079",
+    "five_prime_flank": "GCGUCUCACUCU",
+    "rbs": "GCGA",
+    "spacer": "GUUCUU",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0080",
+    "five_prime_flank": "CGCACGCUCGUC",
+    "rbs": "GCGA",
+    "spacer": "GGAAAGA",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0081",
+    "five_prime_flank": "AUCGCUUCAUCA",
+    "rbs": "GCGA",
+    "spacer": "AAGA",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0082",
+    "five_prime_flank": "CCACUGCUCCGU",
+    "rbs": "GCGA",
+    "spacer": "CGGC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0083",
+    "five_prime_flank": "CGCUUUCUGCCU",
+    "rbs": "GCGA",
+    "spacer": "CCACC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0084",
+    "five_prime_flank": "GUCUCCAUGUCA",
+    "rbs": "GCGA",
+    "spacer": "CGGA",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0085",
+    "five_prime_flank": "CUUUAUAUCAGU",
+    "rbs": "GCGA",
+    "spacer": "UGCU",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0086",
+    "five_prime_flank": "CUCUUGUAACUA",
+    "rbs": "GCGA",
+    "spacer": "GGCUAUA",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0087",
+    "five_prime_flank": "UUCUAUGACAAU",
+    "rbs": "GCGA",
+    "spacer": "GCAGUAC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0088",
+    "five_prime_flank": "CUCACGCAUUCU",
+    "rbs": "GCGA",
+    "spacer": "UGCUU",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0089",
+    "five_prime_flank": "GUCGCGGGCGCU",
+    "rbs": "GCGA",
+    "spacer": "GCUC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0090",
+    "five_prime_flank": "AACACGCUCCCU",
+    "rbs": "GCGA",
+    "spacer": "AAGAG",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0091",
+    "five_prime_flank": "CUCUCAUAUUCG",
+    "rbs": "GCGA",
+    "spacer": "CUGGCUA",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0092",
+    "five_prime_flank": "ACCGGGAUCUCU",
+    "rbs": "GCGA",
+    "spacer": "GGCAGUU",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0093",
+    "five_prime_flank": "CCCUACCCCCAC",
+    "rbs": "GCGA",
+    "spacer": "GUUUGC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0094",
+    "five_prime_flank": "CUCUCGUCACCU",
+    "rbs": "GCGA",
+    "spacer": "CGUUUGC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0095",
+    "five_prime_flank": "CUUUAACUCUCC",
+    "rbs": "GCGA",
+    "spacer": "ACUGUC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0096",
+    "five_prime_flank": "CGGUCGAUCUUU",
+    "rbs": "GCGA",
+    "spacer": "UACCU",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0097",
+    "five_prime_flank": "AUUCCACGUUGC",
+    "rbs": "GCGA",
+    "spacer": "ACGGA",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0098",
+    "five_prime_flank": "UGCAAUCAAUCU",
+    "rbs": "GCGA",
+    "spacer": "GUGUCGC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0099",
+    "five_prime_flank": "CUGACUCUCCGC",
+    "rbs": "GCGA",
+    "spacer": "AUCC",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  },
+  {
+    "name": "opt_gene_c0100",
+    "five_prime_flank": "UACCCUCGGUCU",
+    "rbs": "GCGA",
+    "spacer": "CAGU",
+    "cds_start": "GAGAGAGAGAGAG",
+    "mutable_regions": [
+      "five_prime_flank",
+      "rbs",
+      "spacer"
+    ]
+  }
+]

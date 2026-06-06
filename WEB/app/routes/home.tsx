@@ -38,7 +38,6 @@ const INITIAL_CANDIDATES = [
     orthScore: "0.92",
     wtLeakage: "0.03",
     rbsAccess: "0.88",
-    fitness: "0.91",
     structure: "((((((.......))),). ... ((...)) AUG .....",
   },
   {
@@ -47,7 +46,6 @@ const INITIAL_CANDIDATES = [
     orthScore: "0.89",
     wtLeakage: "0.04",
     rbsAccess: "0.85",
-    fitness: "0.88",
     structure: "((((((.......))))). ... ((...)) AUG .....",
   },
   {
@@ -56,7 +54,6 @@ const INITIAL_CANDIDATES = [
     orthScore: "0.86",
     wtLeakage: "0.05",
     rbsAccess: "0.82",
-    fitness: "0.84",
     structure: "(((((.........))))). ... ((...)) AUG .....",
   },
   {
@@ -65,7 +62,6 @@ const INITIAL_CANDIDATES = [
     orthScore: "0.83",
     wtLeakage: "0.06",
     rbsAccess: "0.78",
-    fitness: "0.80",
     structure: "(((((.........))))). ... ((...)) AUG .....",
   },
   {
@@ -74,28 +70,9 @@ const INITIAL_CANDIDATES = [
     orthScore: "0.80",
     wtLeakage: "0.07",
     rbsAccess: "0.76",
-    fitness: "0.77",
     structure: "((((...........)))). ... ((...)) AUG .....",
   },
 ];
-
-const INITIAL_FITNESS_DATA = (() => {
-  const data = [];
-  for (let i = 0; i <= 100; i++) {
-    const bestNoise = Math.sin(i / 6) * 0.006 + (i % 7 === 0 ? 0.004 : -0.004);
-    const avgNoise = Math.cos(i / 10) * 0.005 + (i % 5 === 0 ? 0.002 : -0.002);
-
-    const bestVal = Math.min(1.0, 0.18 + 0.60 * Math.pow(i / 100, 0.35) + bestNoise);
-    const avgVal = Math.min(bestVal, 0.10 + 0.48 * Math.pow(i / 100, 0.5) + avgNoise);
-
-    data.push({
-      generation: i,
-      best: parseFloat(bestVal.toFixed(3)),
-      avg: parseFloat(avgVal.toFixed(3)),
-    });
-  }
-  return data;
-})();
 
 const INITIAL_SCATTER_POINTS = (() => {
   const points = [];
@@ -153,14 +130,7 @@ interface Candidate {
   orthScore: string;
   wtLeakage: string;
   rbsAccess: string;
-  fitness: string;
   structure: string;
-}
-
-interface FitnessPoint {
-  generation: number;
-  best: number;
-  avg: number;
 }
 
 interface ScatterPoint {
@@ -172,14 +142,18 @@ interface ScatterPoint {
 
 export default function Home({ loaderData }: Route.ComponentProps) {
   const navigate = useNavigate();
-  const [sequence, setSequence] = useState("");
-  const [fileName, setFileName] = useState("");
 
   // Input states
-  const [orthogonalAntiSD, setOrthogonalAntiSD] = useState("");
-  const [wtAntiSD, setWtAntiSD] = useState("");
-  const [cdsStart, setCdsStart] = useState("");
+  const [antiSD, setAntiSD] = useState("AUCGCAAAACGAUCGUU");
+  const [beforeRBS, setBeforeRBS] = useState("CUCUCUCUCUCU");
+  const [afterRBS, setAfterRBS] = useState("GAGAGAGAGAGAG");
+  const [wtAntiSD, setWtAntiSD] = useState("ACCUCCUUA");
   const [targetExpression, setTargetExpression] = useState("High");
+
+  // Input file name displays
+  const [antiSDFileName, setAntiSDFileName] = useState("");
+  const [beforeRBSFileName, setBeforeRBSFileName] = useState("");
+  const [afterRBSFileName, setAfterRBSFileName] = useState("");
 
   // Selection state
   const [selectedCandidateIndex, setSelectedCandidateIndex] = useState(0);
@@ -193,39 +167,27 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
   // Stateful datasets
   const [candidates, setCandidates] = useState<Candidate[]>(INITIAL_CANDIDATES);
-  const [fitnessData, setFitnessData] = useState<FitnessPoint[]>(INITIAL_FITNESS_DATA);
   const [scatterPoints, setScatterPoints] = useState<ScatterPoint[]>(INITIAL_SCATTER_POINTS);
 
-  // Parse uploaded file sequence
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Parse uploaded file sequence helper
+  const handleSingleFileUpload = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    setter: (val: string) => void,
+    fileNameSetter: (name: string) => void
+  ) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setFileName(file.name);
+    fileNameSetter(file.name);
     const reader = new FileReader();
     reader.onload = (event) => {
       const text = event.target?.result as string;
       if (!text) return;
       const parsed = parseFASTA(text, file.name);
-      setSequence(parsed.sequence);
+      setter(parsed.sequence);
     };
     reader.readAsText(file);
   };
-
-  // Populate inputs when sequence file is uploaded
-  useEffect(() => {
-    if (sequence) {
-      if (sequence.length >= 9) {
-        setOrthogonalAntiSD(sequence.substring(0, 9));
-      }
-      if (sequence.length >= 18) {
-        setWtAntiSD(sequence.substring(9, 18));
-      }
-      if (sequence.length >= 27) {
-        setCdsStart(sequence.substring(18, 27) + "...");
-      }
-    }
-  }, [sequence]);
 
   const handleCopy = (text: string, fieldId: string) => {
     navigator.clipboard.writeText(text);
@@ -233,23 +195,63 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     setTimeout(() => setCopiedField(null), 1500);
   };
 
-  const startOptimization = () => {
+  const startOptimization = async () => {
     if (isOptimizing) return;
     setIsOptimizing(true);
-    setOptProgress(0);
+    setOptProgress(10);
 
-    const interval = setInterval(() => {
-      setOptProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setIsOptimizing(false);
-          // Shuffle candidate ranks for simulation feedback
-          setSelectedCandidateIndex((prevIndex) => (prevIndex + 1) % candidates.length);
-          return 100;
-        }
-        return prev + 10;
+    try {
+      setOptProgress(30);
+      const response = await fetch("http://localhost:8000/api/optimize", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          antiSD: antiSD,
+          beforeRBS: beforeRBS,
+          afterRBS: afterRBS,
+          wtAntiSD: wtAntiSD,
+          targetExpression: targetExpression,
+        }),
       });
-    }, 150);
+
+      setOptProgress(70);
+      if (!response.ok) {
+        throw new Error(`API error: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      // Update state with results from FastAPI
+      if (Array.isArray(data.candidates)) {
+        setCandidates(data.candidates);
+      }
+      if (Array.isArray(data.scatterPoints)) {
+        setScatterPoints(data.scatterPoints);
+      }
+
+      setSelectedCandidateIndex(0);
+      setOptProgress(100);
+      setTimeout(() => setIsOptimizing(false), 300);
+
+    } catch (err) {
+      console.warn("Backend server not running. Falling back to local optimization simulation.", err);
+
+      // Fallback local simulation
+      let progress = 10;
+      const interval = setInterval(() => {
+        progress += 15;
+        if (progress >= 100) {
+          clearInterval(interval);
+          setOptProgress(100);
+          setIsOptimizing(false);
+          setSelectedCandidateIndex((prevIndex) => (prevIndex + 1) % candidates.length);
+        } else {
+          setOptProgress(progress);
+        }
+      }, 150);
+    }
   };
 
   // Dataset Import Handler
@@ -267,19 +269,22 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           const parsed = ingestJSON(content);
 
           if (parsed.inputs) {
-            if (parsed.inputs.orthogonalAntiSD) setOrthogonalAntiSD(parsed.inputs.orthogonalAntiSD);
-            if (parsed.inputs.wtAntiSD) setWtAntiSD(parsed.inputs.wtAntiSD);
-            if (parsed.inputs.cdsStart) setCdsStart(parsed.inputs.cdsStart);
-            if (parsed.inputs.targetExpression) setTargetExpression(parsed.inputs.targetExpression);
+            const parsedInputs = parsed.inputs as any;
+            if (parsedInputs.antiSD) setAntiSD(parsedInputs.antiSD);
+            else if (parsedInputs.orthogonalAntiSD) setAntiSD(parsedInputs.orthogonalAntiSD);
+
+            if (parsedInputs.beforeRBS) setBeforeRBS(parsedInputs.beforeRBS);
+
+            if (parsedInputs.afterRBS) setAfterRBS(parsedInputs.afterRBS);
+            else if (parsedInputs.cdsStart) setAfterRBS(parsedInputs.cdsStart);
+
+            if (parsedInputs.wtAntiSD) setWtAntiSD(parsedInputs.wtAntiSD);
+            if (parsedInputs.targetExpression) setTargetExpression(parsedInputs.targetExpression);
           }
 
           if (Array.isArray(parsed.candidates)) {
             setCandidates(parsed.candidates);
             setSelectedCandidateIndex(0);
-          }
-
-          if (Array.isArray(parsed.fitnessData)) {
-            setFitnessData(parsed.fitnessData);
           }
 
           if (Array.isArray(parsed.scatterPoints)) {
@@ -296,9 +301,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           setCandidates(result.data);
           setSelectedCandidateIndex(0);
           alert(`Loaded ${result.data.length} candidates from CSV!`);
-        } else if (result.type === "fitness") {
-          setFitnessData(result.data);
-          alert(`Loaded ${result.data.length} generations of fitness data from CSV!`);
         } else if (result.type === "scatter") {
           setScatterPoints(result.data);
           alert(`Loaded ${result.data.length} landscape data points from CSV!`);
@@ -315,31 +317,23 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   // Auto-sync computed sequence and annotations to localStorage for Structure Inspector
   useEffect(() => {
     if (selectedCandidate) {
-      const upstream = "GCTTT";
-      const rbsSeq = selectedCandidate.rbs.replace(/U/g, "T");
-      const spacerSeq = selectedCandidate.spacer.replace(/U/g, "T");
-      const startCodon = "ATG";
+      const up = (selectedCandidate.five_prime_flank || beforeRBS).replace(/U/g, "T").toUpperCase();
+      const rbsSeq = selectedCandidate.rbs.replace(/U/g, "T").toUpperCase();
+      const spacerSeq = selectedCandidate.spacer.replace(/U/g, "T").toUpperCase();
+      const down = (selectedCandidate.cds_start || afterRBS).replace(/U/g, "T").toUpperCase();
 
-      // Calculate remaining CDS sequence from cdsStart field
-      const cdsRemaining = cdsStart
-        .replace(/\./g, "")
-        .replace(/U/g, "T")
-        .toUpperCase();
-
-      const cdsPart = cdsRemaining.startsWith("ATG") ? cdsRemaining.substring(3) : cdsRemaining;
-      const computedSeq = upstream + rbsSeq + spacerSeq + startCodon + cdsPart;
+      const computedSeq = up + rbsSeq + spacerSeq + down;
 
       const newAnnotations = [
-        { name: "Upstream", start: 0, end: upstream.length, direction: 1, color: "#6b7280" },
-        { name: "RBS Site", start: upstream.length, end: upstream.length + rbsSeq.length, direction: 1, color: "#dc2626" },
-        { name: "Spacer", start: upstream.length + rbsSeq.length, end: upstream.length + rbsSeq.length + spacerSeq.length, direction: 1, color: "#eab308" },
-        { name: "Start Codon", start: upstream.length + rbsSeq.length + spacerSeq.length, end: upstream.length + rbsSeq.length + spacerSeq.length + 3, direction: 1, color: "#3b82f6" }
+        { name: "Upstream (beforeRBS)", start: 0, end: up.length, direction: 1, color: "#6b7280" },
+        { name: "RBS Site", start: up.length, end: up.length + rbsSeq.length, direction: 1, color: "#dc2626" },
+        { name: "Spacer", start: up.length + rbsSeq.length, end: up.length + rbsSeq.length + spacerSeq.length, direction: 1, color: "#eab308" }
       ];
 
-      if (cdsPart.length > 0) {
+      if (down.length > 0) {
         newAnnotations.push({
-          name: "Coding Sequence (CDS)",
-          start: upstream.length + rbsSeq.length + spacerSeq.length + 3,
+          name: "Downstream (afterRBS)",
+          start: up.length + rbsSeq.length + spacerSeq.length,
           end: computedSeq.length,
           direction: 1,
           color: "#10b981"
@@ -353,49 +347,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         annotations: newAnnotations
       }));
     }
-  }, [selectedCandidate, cdsStart]);
+  }, [selectedCandidate, beforeRBS, afterRBS]);
 
-  const getFitnessX = (gen: number) => 40 + (gen / 100) * 440;
-  const getFitnessY = (fit: number) => 170 - fit * 140;
 
-  const bestD = useMemo(() => {
-    return "M " + fitnessData.map((d) => `${getFitnessX(d.generation)},${getFitnessY(d.best)}`).join(" L ");
-  }, [fitnessData]);
-
-  const avgD = useMemo(() => {
-    return "M " + fitnessData.map((d) => `${getFitnessX(d.generation)},${getFitnessY(d.avg)}`).join(" L ");
-  }, [fitnessData]);
-
-  // GA Fitness Interactive Tooltip State
-  const [hoveredFitnessData, setHoveredFitnessData] = useState<{
-    generation: number;
-    best: number;
-    avg: number;
-    x: number;
-    y: number;
-  } | null>(null);
-
-  const handleFitnessMouseMove = (e: React.MouseEvent<SVGSVGElement, MouseEvent>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const plotWidth = 440;
-    const startX = 40;
-    const pct = Math.max(0, Math.min(1, (x - startX) / plotWidth));
-    const gen = Math.round(pct * 100);
-
-    const dataPoint = fitnessData[gen];
-    if (dataPoint) {
-      setHoveredFitnessData({
-        ...dataPoint,
-        x: getFitnessX(gen),
-        y: getFitnessY(dataPoint.best),
-      });
-    }
-  };
-
-  const handleFitnessMouseLeave = () => {
-    setHoveredFitnessData(null);
-  };
 
   const getScatterX = (leakage: number) => {
     const logVal = Math.log10(leakage);
@@ -523,44 +477,45 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         <div className="flex-1 overflow-y-auto p-8 space-y-6 bg-muted/20">
           <div className="grid grid-cols-6 gap-6 max-w-[1400px] mx-auto">
 
-            {/* CARD A: Inputs */}
-            <div className="col-span-3 bg-card text-card-foreground p-6  border border-border  flex flex-col justify-between">
-              <div className="flex items-center justify-between mb-4 border-b border-border pb-3">
+            {/* CARD A: Designer Inputs */}
+            <div className="col-span-3 bg-card text-card-foreground p-6 border border-border flex flex-col justify-between space-y-4">
+              <div className="border-b border-border pb-2">
                 <h2 className="font-bold text-card-foreground/80 text-xs tracking-wider uppercase">
                   Designer Inputs
                 </h2>
-
-                {/* File Upload Trigger */}
-                <label className="flex items-center space-x-1.5 text-xs text-primary hover:text-primary/80 font-semibold cursor-pointer transition-colors bg-primary/5 px-2.5 py-1 rounded-md border border-primary/10">
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>{fileName ? fileName : "Upload sequence"}</span>
-                  <input
-                    type="file"
-                    accept=".fasta,.txt,.seq"
-                    className="hidden"
-                    onChange={handleFileUpload}
-                  />
-                </label>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                {/* Input 1 */}
-                <div className="space-y-1">
-                  <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
-                    Orthogonal anti-SD
-                  </label>
+              <div className="space-y-4">
+                {/* Input 1: antiSD */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
+                      antiSD Sequence (--sequence)
+                    </label>
+                    <label className="flex items-center space-x-1.5 text-xs text-primary hover:text-primary/80 font-bold cursor-pointer transition-colors bg-primary/5 px-2.5 py-0.5 border border-primary/10">
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>{antiSDFileName ? antiSDFileName : "Upload file"}</span>
+                      <input
+                        type="file"
+                        accept=".fasta,.txt,.seq,.fa"
+                        className="hidden"
+                        onChange={(e) => handleSingleFileUpload(e, setAntiSD, setAntiSDFileName)}
+                      />
+                    </label>
+                  </div>
                   <div className="relative flex items-center">
                     <input
                       type="text"
-                      value={orthogonalAntiSD}
-                      onChange={(e) => setOrthogonalAntiSD(e.target.value.toUpperCase())}
-                      className="w-full bg-muted/40 border border-border  px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary pr-10 uppercase text-foreground"
+                      value={antiSD}
+                      onChange={(e) => setAntiSD(e.target.value.toUpperCase())}
+                      className="w-full bg-muted/40 border border-border px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary pr-10 uppercase text-foreground"
+                      placeholder="Paste antiSD sequence or local file path"
                     />
                     <button
-                      onClick={() => handleCopy(orthogonalAntiSD, "orth")}
+                      onClick={() => handleCopy(antiSD, "antiSD")}
                       className="absolute right-2 text-muted-foreground hover:text-foreground p-1"
                     >
-                      {copiedField === "orth" ? (
+                      {copiedField === "antiSD" ? (
                         <Check className="w-4 h-4 text-primary animate-in fade-in zoom-in-50 duration-200" />
                       ) : (
                         <Copy className="w-4 h-4" />
@@ -569,23 +524,36 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                   </div>
                 </div>
 
-                {/* Input 2 */}
-                <div className="space-y-1">
-                  <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
-                    WT anti-SD
-                  </label>
+                {/* Input 2: beforeRBS */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
+                      beforeRBS Sequence (--mrna5)
+                    </label>
+                    <label className="flex items-center space-x-1.5 text-xs text-primary hover:text-primary/80 font-bold cursor-pointer transition-colors bg-primary/5 px-2.5 py-0.5 border border-primary/10">
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>{beforeRBSFileName ? beforeRBSFileName : "Upload file"}</span>
+                      <input
+                        type="file"
+                        accept=".fasta,.txt,.seq,.fa"
+                        className="hidden"
+                        onChange={(e) => handleSingleFileUpload(e, setBeforeRBS, setBeforeRBSFileName)}
+                      />
+                    </label>
+                  </div>
                   <div className="relative flex items-center">
                     <input
                       type="text"
-                      value={wtAntiSD}
-                      onChange={(e) => setWtAntiSD(e.target.value.toUpperCase())}
-                      className="w-full bg-muted/40 border border-border  px-3 py-2 text-sm font-mono pr-10 focus:outline-none focus:ring-1 focus:ring-primary uppercase text-foreground"
+                      value={beforeRBS}
+                      onChange={(e) => setBeforeRBS(e.target.value.toUpperCase())}
+                      className="w-full bg-muted/40 border border-border px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary pr-10 uppercase text-foreground"
+                      placeholder="Paste beforeRBS sequence or local file path"
                     />
                     <button
-                      onClick={() => handleCopy(wtAntiSD, "wt")}
+                      onClick={() => handleCopy(beforeRBS, "beforeRBS")}
                       className="absolute right-2 text-muted-foreground hover:text-foreground p-1"
                     >
-                      {copiedField === "wt" ? (
+                      {copiedField === "beforeRBS" ? (
                         <Check className="w-4 h-4 text-primary animate-in fade-in zoom-in-50 duration-200" />
                       ) : (
                         <Copy className="w-4 h-4" />
@@ -594,23 +562,36 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                   </div>
                 </div>
 
-                {/* Input 3 */}
-                <div className="space-y-1">
-                  <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
-                    CDS start
-                  </label>
+                {/* Input 3: afterRBS */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
+                      afterRBS Sequence (--mrna3)
+                    </label>
+                    <label className="flex items-center space-x-1.5 text-xs text-primary hover:text-primary/80 font-bold cursor-pointer transition-colors bg-primary/5 px-2.5 py-0.5 border border-primary/10">
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>{afterRBSFileName ? afterRBSFileName : "Upload file"}</span>
+                      <input
+                        type="file"
+                        accept=".fasta,.txt,.seq,.fa"
+                        className="hidden"
+                        onChange={(e) => handleSingleFileUpload(e, setAfterRBS, setAfterRBSFileName)}
+                      />
+                    </label>
+                  </div>
                   <div className="relative flex items-center">
                     <input
                       type="text"
-                      value={cdsStart}
-                      onChange={(e) => setCdsStart(e.target.value)}
-                      className="w-full bg-muted/40 border border-border  px-3 py-2 text-sm font-mono pr-10 focus:outline-none focus:ring-1 focus:ring-primary text-foreground"
+                      value={afterRBS}
+                      onChange={(e) => setAfterRBS(e.target.value.toUpperCase())}
+                      className="w-full bg-muted/40 border border-border px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary pr-10 uppercase text-foreground"
+                      placeholder="Paste afterRBS sequence or local file path"
                     />
                     <button
-                      onClick={() => handleCopy(cdsStart, "cds")}
+                      onClick={() => handleCopy(afterRBS, "afterRBS")}
                       className="absolute right-2 text-muted-foreground hover:text-foreground p-1"
                     >
-                      {copiedField === "cds" ? (
+                      {copiedField === "afterRBS" ? (
                         <Check className="w-4 h-4 text-primary animate-in fade-in zoom-in-50 duration-200" />
                       ) : (
                         <Copy className="w-4 h-4" />
@@ -619,22 +600,48 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                   </div>
                 </div>
 
-                {/* Input 4 */}
-                <div className="space-y-1">
-                  <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
-                    Target expression
-                  </label>
-                  <div className="relative">
-                    <select
-                      value={targetExpression}
-                      onChange={(e) => setTargetExpression(e.target.value)}
-                      className="w-full bg-muted/40 border border-border  px-3 py-2 text-sm appearance-none focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer text-foreground"
-                    >
-                      <option value="High">High</option>
-                      <option value="Medium">Medium</option>
-                      <option value="Low">Low</option>
-                    </select>
-                    <ChevronDown className="w-4 h-4 text-muted-foreground absolute right-3 top-3.5 pointer-events-none" />
+                {/* Additional parameters: WT anti-SD and Target Expression */}
+                <div className="grid grid-cols-2 gap-4 pt-2">
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
+                      WT anti-SD
+                    </label>
+                    <div className="relative flex items-center">
+                      <input
+                        type="text"
+                        value={wtAntiSD}
+                        onChange={(e) => setWtAntiSD(e.target.value.toUpperCase())}
+                        className="w-full bg-muted/40 border border-border px-3 py-2 text-sm font-mono pr-10 focus:outline-none focus:ring-1 focus:ring-primary uppercase text-foreground"
+                      />
+                      <button
+                        onClick={() => handleCopy(wtAntiSD, "wt")}
+                        className="absolute right-2 text-muted-foreground hover:text-foreground p-1"
+                      >
+                        {copiedField === "wt" ? (
+                          <Check className="w-4 h-4 text-primary animate-in fade-in zoom-in-50 duration-200" />
+                        ) : (
+                          <Copy className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
+                      Target expression
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={targetExpression}
+                        onChange={(e) => setTargetExpression(e.target.value)}
+                        className="w-full bg-muted/40 border border-border px-3 py-2 text-sm appearance-none focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer text-foreground"
+                      >
+                        <option value="High">High</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Low">Low</option>
+                      </select>
+                      <ChevronDown className="w-4 h-4 text-muted-foreground absolute right-3 top-3.5 pointer-events-none" />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -700,178 +707,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               </div>
             </div>
 
-            {/* CARD C: GA Fitness Evolution */}
-            <div className="col-span-3 bg-card text-card-foreground p-6  border border-border  relative group">
-              <div className="flex items-center space-x-1.5 mb-2">
-                <h3 className="font-bold text-card-foreground text-xs tracking-wider uppercase">
-                  GA Fitness Evolution
-                </h3>
-                <div className="relative cursor-pointer group/info">
-                  <Info className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-                  <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-48 bg-neutral-900 text-white text-[10px] p-2.5  opacity-0 pointer-events-none group-hover/info:opacity-100 transition-opacity z-50 shadow-lg leading-relaxed">
-                    Tracks the maximum (Best) and mean (Average) fitness scores of RBS designs over 100 generations of the Genetic Algorithm.
-                  </div>
-                </div>
-              </div>
-
-              {/* Chart Legend */}
-              <div className="flex items-center space-x-4 text-xs font-bold mb-4">
-                <div className="flex items-center space-x-1.5">
-                  <span className="w-3.5 h-0.5 bg-primary inline-block" />
-                  <span className="text-muted-foreground">Best Fitness</span>
-                </div>
-                <div className="flex items-center space-x-1.5">
-                  <span className="w-3.5 h-0.5 border-t border-dashed border-muted-foreground inline-block" />
-                  <span className="text-muted-foreground">Average Fitness</span>
-                </div>
-              </div>
-
-              {/* SVG Plot */}
-              <div className="relative">
-                <svg
-                  viewBox="0 0 500 200"
-                  className="w-full overflow-visible"
-                  onMouseMove={handleFitnessMouseMove}
-                  onMouseLeave={handleFitnessMouseLeave}
-                >
-                  {/* Grid Lines */}
-                  {[0, 0.2, 0.4, 0.6, 0.8, 1.0].map((val) => (
-                    <line
-                      key={val}
-                      x1="40"
-                      y1={getFitnessY(val)}
-                      x2="480"
-                      y2={getFitnessY(val)}
-                      className="stroke-border"
-                      strokeWidth="1"
-                    />
-                  ))}
-                  {[0, 20, 40, 60, 80, 100].map((gen) => (
-                    <line
-                      key={gen}
-                      x1={getFitnessX(gen)}
-                      y1="20"
-                      x2={getFitnessX(gen)}
-                      y2="170"
-                      className="stroke-border"
-                      strokeWidth="1"
-                    />
-                  ))}
-
-                  {/* Axes */}
-                  <line x1="40" y1="170" x2="480" y2="170" className="stroke-muted-foreground/50" strokeWidth="1.5" />
-                  <line x1="40" y1="20" x2="40" y2="170" className="stroke-muted-foreground/50" strokeWidth="1.5" />
-
-                  {/* Axis Labels */}
-                  {[0, 20, 40, 60, 80, 100].map((gen) => (
-                    <text
-                      key={gen}
-                      x={getFitnessX(gen)}
-                      y="185"
-                      textAnchor="middle"
-                      className="text-[9px] fill-muted-foreground font-bold"
-                    >
-                      {gen}
-                    </text>
-                  ))}
-                  <text x="260" y="198" textAnchor="middle" className="text-[10px] fill-muted-foreground font-bold">
-                    Generation
-                  </text>
-
-                  {[0, 0.2, 0.4, 0.6, 0.8, 1.0].map((val) => (
-                    <text
-                      key={val}
-                      x="30"
-                      y={getFitnessY(val) + 3}
-                      textAnchor="end"
-                      className="text-[9px] fill-muted-foreground font-bold"
-                    >
-                      {val.toFixed(1)}
-                    </text>
-                  ))}
-                  <text
-                    x="12"
-                    y="95"
-                    textAnchor="middle"
-                    transform="rotate(-90, 12, 95)"
-                    className="text-[10px] fill-muted-foreground font-bold"
-                  >
-                    Fitness
-                  </text>
-
-                  {/* Line Paths */}
-                  <path
-                    d={avgD}
-                    fill="none"
-                    className="stroke-muted-foreground transition-all duration-300"
-                    strokeWidth="1.5"
-                    strokeDasharray="4,3"
-                  />
-                  <path
-                    d={bestD}
-                    fill="none"
-                    className="stroke-primary transition-all duration-300"
-                    strokeWidth="2"
-                  />
-
-                  {/* Hover Elements */}
-                  {hoveredFitnessData && (
-                    <>
-                      <line
-                        x1={hoveredFitnessData.x}
-                        y1="20"
-                        x2={hoveredFitnessData.x}
-                        y2="170"
-                        className="stroke-muted-foreground"
-                        strokeWidth="1"
-                        strokeDasharray="2,2"
-                      />
-                      <circle
-                        cx={hoveredFitnessData.x}
-                        cy={getFitnessY(hoveredFitnessData.best)}
-                        r="4.5"
-                        className="fill-primary stroke-card"
-                        strokeWidth="1.5"
-                      />
-                      <circle
-                        cx={hoveredFitnessData.x}
-                        cy={getFitnessY(hoveredFitnessData.avg)}
-                        r="4.5"
-                        className="fill-muted-foreground stroke-card"
-                        strokeWidth="1.5"
-                      />
-                    </>
-                  )}
-                </svg>
-
-                {/* Fitness Tooltip overlay */}
-                {hoveredFitnessData && (
-                  <div
-                    className="absolute bg-neutral-900/95 text-white text-[10px] p-2.5  shadow-lg pointer-events-none z-30 flex flex-col space-y-1 border border-neutral-800"
-                    style={{
-                      left: `${(hoveredFitnessData.x / 500) * 100}%`,
-                      top: "24px",
-                      transform: hoveredFitnessData.x > 250 ? "translateX(-110%)" : "translateX(10%)",
-                    }}
-                  >
-                    <div className="font-bold text-neutral-300 border-b border-neutral-800 pb-1 mb-1">
-                      Gen {hoveredFitnessData.generation}
-                    </div>
-                    <div className="flex justify-between space-x-4">
-                      <span className="text-neutral-400 font-semibold">Best:</span>
-                      <span className="font-bold text-red-400">{hoveredFitnessData.best}</span>
-                    </div>
-                    <div className="flex justify-between space-x-4">
-                      <span className="text-neutral-400 font-semibold">Average:</span>
-                      <span className="font-bold text-neutral-400">{hoveredFitnessData.avg}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
             {/* CARD D: Orthogonality Landscape */}
-            <div className="col-span-3 bg-card text-card-foreground p-6  border border-border  relative group">
+            <div className="col-span-6 bg-card text-card-foreground p-6  border border-border  relative group">
               <div className="flex items-center space-x-1.5 mb-4">
                 <h3 className="font-bold text-card-foreground text-xs tracking-wider uppercase">
                   Orthogonality Landscape
@@ -1057,7 +894,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                         <th className="py-2.5 pb-2 text-right">Orth</th>
                         <th className="py-2.5 pb-2 text-right">WT Leak</th>
                         <th className="py-2.5 pb-2 text-right">Access</th>
-                        <th className="py-2.5 pb-2 text-right">Fitness</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/60">
@@ -1098,9 +934,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                             </td>
                             <td className="py-3 text-right font-bold text-foreground/80">
                               {cand.rbsAccess}
-                            </td>
-                            <td className="py-3 text-right font-extrabold text-foreground">
-                              {cand.fitness}
                             </td>
                           </tr>
                         );
@@ -1157,17 +990,42 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 {/* Structure box - Red highlight */}
                 <div className="bg-muted/40 p-3.5  border border-border font-mono text-[11px] overflow-x-auto whitespace-nowrap leading-relaxed text-muted-foreground select-all">
                   <span className="opacity-60">... </span>
-                  <span className="bg-primary/10 text-primary font-extrabold px-1 py-0.5 rounded">
-                    {selectedCandidate ? selectedCandidate.structure.substring(0, selectedCandidate.rbs.length) : ""}
+                  <span className="bg-primary/10 text-primary font-extrabold px-1 py-0.5 rounded" title="RBS Site">
+                    {selectedCandidate ? (() => {
+                      const flankLen = selectedCandidate.five_prime_flank ? selectedCandidate.five_prime_flank.length : 0;
+                      return selectedCandidate.structure.substring(flankLen, flankLen + selectedCandidate.rbs.length);
+                    })() : ""}
                   </span>
-                  <span className="text-muted-foreground font-bold">
-                    {selectedCandidate ? selectedCandidate.structure.substring(
-                      selectedCandidate.rbs.length,
-                      selectedCandidate.structure.length - 3
-                    ) : ""}
+                  <span className="text-muted-foreground font-bold" title="Spacer">
+                    {selectedCandidate ? (() => {
+                      const flankLen = selectedCandidate.five_prime_flank ? selectedCandidate.five_prime_flank.length : 0;
+                      const rbsLen = selectedCandidate.rbs.length;
+                      return selectedCandidate.structure.substring(flankLen + rbsLen, flankLen + rbsLen + selectedCandidate.spacer.length);
+                    })() : ""}
                   </span>
-                  <span className="bg-blue-100/10 text-blue-500 font-extrabold px-1 py-0.5 rounded">
-                    {selectedCandidate ? selectedCandidate.structure.substring(selectedCandidate.structure.length - 3) : ""}
+                  <span className="bg-blue-100/10 text-blue-500 font-extrabold px-1 py-0.5 rounded" title="Start Codon">
+                    {selectedCandidate ? (() => {
+                      const flankLen = selectedCandidate.five_prime_flank ? selectedCandidate.five_prime_flank.length : 0;
+                      const rbsLen = selectedCandidate.rbs.length;
+                      const spacerLen = selectedCandidate.spacer.length;
+                      const start = flankLen + rbsLen + spacerLen;
+                      if (selectedCandidate.five_prime_flank && start + 3 <= selectedCandidate.structure.length) {
+                        return selectedCandidate.structure.substring(start, start + 3);
+                      }
+                      return selectedCandidate.structure.substring(selectedCandidate.structure.length - 3);
+                    })() : ""}
+                  </span>
+                  <span className="text-muted-foreground opacity-60" title="Downstream remainder">
+                    {selectedCandidate ? (() => {
+                      const flankLen = selectedCandidate.five_prime_flank ? selectedCandidate.five_prime_flank.length : 0;
+                      const rbsLen = selectedCandidate.rbs.length;
+                      const spacerLen = selectedCandidate.spacer.length;
+                      const start = flankLen + rbsLen + spacerLen + 3;
+                      if (selectedCandidate.five_prime_flank && start < selectedCandidate.structure.length) {
+                        return selectedCandidate.structure.substring(start);
+                      }
+                      return "";
+                    })() : ""}
                   </span>
                   <span className="opacity-60"> .....</span>
                 </div>

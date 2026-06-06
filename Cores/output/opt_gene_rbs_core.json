@@ -1,0 +1,16 @@
+[
+    {
+        "name": "opt_gene",
+        "five_prime_flank": "CUCUCUCUCUCU",
+        "canonical_rbs": "AUUCCUCCACUAG",
+        "rbs": "GCGA",
+        "core": "GCGA",
+        "spacer": "",
+        "cds_start": "GAGAGAGAGAGAG",
+        "mutable_regions": [
+            "rbs",
+            "five_prime_flank",
+            "spacer"
+        ]
+    }
+]
