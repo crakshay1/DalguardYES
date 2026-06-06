@@ -1,0 +1,21 @@
+┌── free tail (4 nt) ──┐
+                    │                      │
+mRNA  5'───────[GGAGG]─────────────────────[AUG]────3'
+                |||||  ←── spacer (n nt) ──►
+aSD   3'─[ATTA][CCTCC]─────────────────────────5'
+          └──┘  └───┘
+          free  paired
+          4 nt  5 nt
+          
+          ↑
+          These 4 nt of free aSD tail still occupy
+          physical space in the 30S — they shift the
+          effective origin of the spacer outward by 4 nt
+
+free tail
+                                         ┌────────────┐
+mRNA  5'- G  G  A  G  G  ·  ·  ·  ·  ·  ·  A  U  G -3'
+          |  |  |  |  |     spacer (6nt)
+aSD   3'- C  C  T  C  C  T  T  A -5'
+     pos: 8  7  6  5  4  3  2  1
+          └─ paired ──┘  └─ free
