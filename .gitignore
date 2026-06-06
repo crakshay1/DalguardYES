@@ -28,3 +28,5 @@ mutations_report.csv
 # LinearFold compiled binaries and object files
 2ndStruct/LinearFold/bin/
 2ndStruct/LinearFold/src/*.o
+2ndStruct/RiboTv3.fasta
+2ndStruct/LinearFold
