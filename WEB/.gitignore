@@ -1,5 +1,0 @@
-WEB/tsconfig.cloudflare.tsbuildinfo
-WEB/build/
-WEB/.wrangler/
-WEB/node_modules/
-WEB/.react_router/

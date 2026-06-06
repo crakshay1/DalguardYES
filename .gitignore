@@ -22,8 +22,6 @@ venv/
 .ipynb_checkpoints/
 
 # Project-specific generated outputs
-2ndStruct/*.csv
-mutations_report.csv
 
 # LinearFold compiled binaries and object files
 2ndStruct/LinearFold/bin/
