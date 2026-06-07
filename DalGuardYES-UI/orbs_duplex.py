@@ -2,23 +2,13 @@
 """
 orbs_duplex.py
 
-Scans an input RNA transcript, calculates the duplex energy for each potential self-complementary 
-o-RBS candidate, print the scan results, and write the best merged* hit and core hit
+Scans an input RNA transcript for the strongest self-complementary o-RBS
+candidate, print the scan results, and write the best merged hit and core hit
 to a standardized JSON file as <gene>_rbs_core.json.
 
-*the best hit is the one with the lowest (most negative and most stable) duplex energy;
-if the best (most negative) hit has adjacent hits with similar duplex energy 
-(delta dg <= DG_TOL) are merged into a contiguous region
-
-Uses: 
-
-python3 orbs_duplex.py --sequence AUCGCAAAACAGGAUCGUC --mrna5 AAAAACAAAAA --mrna3 UUUUUUGUUUUUU
-(output: query_20260606_201310_rbs_core.json)
-
+Use (json output in query_20260606_184002_rbs_core.json)
 python3 orbs_duplex.py --fasta Tv3test.fa --mrna5 AAAAACAAAAA --mrna3 UUUUUUGUUUUUU
-(output: query_20260606_224031_rbs_core.json)
 
-@cuajiniquil
 """
 
 from __future__ import annotations
@@ -46,7 +36,7 @@ def sanitize_name(name: str) -> str:
     cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", name.strip())
     return cleaned.strip("._-") or "sequence"
 
-# gets the first FASTA record sequence
+
 def load_fasta_sequence(path: str, to_rna: bool = True) -> tuple[str, str]:
     header, parts = "", []
     with open(path) as fh:
@@ -97,15 +87,12 @@ def revcomp_rna(seq: str) -> str:
     comp = str.maketrans("AUCG", "UAGC")
     return normalize_rna(seq).translate(comp)[::-1]
 
-# RNA energy calculation for seq1 (o-RBS candidate) and seq2 (reverse complement of the candidate)
-# uses ViennaRNA's duplexfold function, which calculates the minimum free energy of the duplex formed by two RNA sequences
+
 def duplex_dg(seq1: str, seq2: str, temp: float = DEFAULT_TEMP) -> float:
     RNA.cvar.temperature = temp
     return RNA.duplexfold(normalize_rna(seq1), normalize_rna(seq2)).energy
 
 
-# dataclasses for storing window scan hits and merged hits as objects 
-# absolute coordinates being relative to the full input sequence
 @dataclass
 class WindowHit:
     abs_start: int
@@ -121,14 +108,7 @@ class MergedHit:
     subseq: str
     dg: float
 
-"""
 
-slides a window of size k across the input sequence, calculates the duplex energy 
-for the k-mer and its reverse complement for each window subsequence.
-Returns a list of WindowHit objects sorted by increasing duplex energy 
-(so the best/most stable hits are first)
-
-"""
 def window_scan(seq: str, abs_offset: int, k: int, temp: float) -> list[WindowHit]:
     hits = []
     for i in range(len(seq) - k + 1):
@@ -144,24 +124,15 @@ def window_scan(seq: str, abs_offset: int, k: int, temp: float) -> list[WindowHi
     hits.sort(key=lambda h: h.dg)
     return hits
 
-"""
 
-collects the top hits with similar duplex energy (delta dg <= DG_TOL), 
-merges them if they're adjacent/overlapping into a contiguous region,
-keeping and updating the interval coordinates and subsequence for the merged region) and returns a list of MergedHit objects sorted by increasing duplex energy
-returns MergedHit objects with absolute coordinates relative to the full input sequence
-
-"""
 def merge_top_hits(hits: list[WindowHit], source_seq: str, source_start: int, temp: float, tolerance: float = DG_TOL) -> list[MergedHit]:
     if not hits:
         return []
 
     best_dg = hits[0].dg
     top_hits = [h for h in hits if abs(h.dg - best_dg) <= tolerance]
-    # rearrange top hits by absolute start coordinate to help merging 
     top_hits.sort(key=lambda h: h.abs_start)
 
-    #merge relevant top hits into contiguous regions, keeping track of their absolute coordinates 
     merged_intervals: list[tuple[int, int]] = []
     cur_start = top_hits[0].abs_start
     cur_end = top_hits[0].abs_end
@@ -169,14 +140,12 @@ def merge_top_hits(hits: list[WindowHit], source_seq: str, source_start: int, te
     for h in top_hits[1:]:
         if h.abs_start <= cur_end + 1:
             cur_end = max(cur_end, h.abs_end)
-        else: # find gap: close the interval and start a new one
+        else:
             merged_intervals.append((cur_start, cur_end))
             cur_start, cur_end = h.abs_start, h.abs_end
 
     merged_intervals.append((cur_start, cur_end))
 
-    # recalculate the duplex energy for the merged regions, using the full merged subsequence and its reverse complement, 
-    # store as MergedHit objects with absolute coordinates
     merged = []
     for start, end in merged_intervals:
         rel_start = start - source_start
@@ -234,20 +203,22 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = build_parser().parse_args()
 
-    # resolver functions/if statements for fasta/raw sequence inputs for both RBS and flanking mRNA fragments, 
-    # returning the sequence and an optional header (for name inference)
+    # resolve o-RBS transcript
     full_seq, inferred_name = resolve_input_sequence(args.sequence, args.fasta)
 
+    # resolve 5' mRNA flank
     if args.mrna5_fasta:
         _, mrna5 = load_fasta_sequence(args.mrna5_fasta, to_rna=True)
     else:
         mrna5 = normalize_rna(args.mrna5)
 
+    # resolve 3' mRNA flank
     if args.mrna3_fasta:
         _, mrna3 = load_fasta_sequence(args.mrna3_fasta, to_rna=True)
     else:
         mrna3 = normalize_rna(args.mrna3)
 
+    # resolve canonical RBS
     if args.canonical_rbs_fasta:
         _, canonical_rbs = load_fasta_sequence(args.canonical_rbs_fasta, to_rna=True)
     else:
@@ -272,11 +243,10 @@ def main() -> None:
     merged = merge_top_hits(hits, seq, abs_start, args.temp)
     print("MERGED TOP-HIT REGIONS")
     print("ABS_START\tABS_END\tLEN\tSEQUENCE\tDG")
-
     for m in merged:
         print(f"{m.abs_start}\t{m.abs_end}\t{len(m.subseq)}\t{m.subseq}\t{m.dg:.2f}")
 
-    # write output in format compatible with downstream scripts, 
+    if merged:
         output_dir = Path(args.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
         output_path = output_dir / f"{gene_name}_rbs_core.json"
@@ -285,9 +255,9 @@ def main() -> None:
         candidate = {
             "name": gene_name,
             "five_prime_flank": mrna5,
-            "canonical_rbs": canonical_rbs, # aka wt rbs, wild type rbs 
-            "rbs": revcomp_rna(full_seq),
-            "core": revcomp_rna(best.subseq),
+            "canonical_rbs": canonical_rbs,
+            "rbs": revcomp_rna(best.subseq),
+            "core": revcomp_rna(core.subseq),
             "spacer": "",
             "cds_start": mrna3,
             "mutable_regions": ["rbs", "five_prime_flank", "spacer"],
@@ -297,7 +267,7 @@ def main() -> None:
             fh.write("\n")
         print(f"WROTE {output_path}")
     else:
-        print("No merged o-RBS candidate found, no output written.")
+        print("No merged o-RBS candidate found; no FASTA file written.")
 
 
 if __name__ == "__main__":
