@@ -115,29 +115,26 @@ def junction_has_stop(flank: str, rbs: str, spacer: str, cds_start: str, window:
 # Mutators
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _randomise_positions(seq: str, standby: bool = False) -> str:
+def _randomise_positions(seq: str) -> str:
     """
         Per-position independent randomisation:
-        each nucleotide has a 50% chance of being replaced by a different nt,
-        20% chance of deletion, 10% chance of insertion, 20% chance of being kept.
+        each nucleotide has a 50% chance of being replaced by a different nt.
     """
     result = []
     for nt in seq:
-        r = random.random()
-        if r < 0.5:
-            # Substitution
+        if random.random() < 0.5:
             result.append(random.choice([n for n in NUCLEOTIDES if n != nt]))
-        elif r < 0.7 and not standby:
-            # Deletion
-            pass
-        elif r < 0.8 and not standby:
-            # Insertion
-            result.append(random.choice(NUCLEOTIDES))
-            result.append(nt)
         else:
-            # No mutation
             result.append(nt)
     return "".join(result)
+
+
+def mutate_flank(flank: str, standby_start: int) -> str:
+    """
+        Positions 0 .. standby_start-1  => FROZEN.
+        Positions standby_start .. end  => randomised.
+    """
+    return flank[:standby_start] + _randomise_positions(flank[standby_start:])
 
 
 def mutate_rbs_non_core(full_rbs: str, core: str) -> str | None:
@@ -169,7 +166,7 @@ def random_spacer(length: int, max_tries: int = 1000) -> str | None:
 # Per-seed generation
 # ─────────────────────────────────────────────────────────────────────────────
 
-def generate_candidates(seed: dict[str, Any], n: int, spacer_len_min: int, spacer_len_max: int, max_tries: int) -> list[dict[str, Any]]:
+def generate_candidates(seed: dict[str, Any], n: int, standby_start: int, spacer_len_min: int, spacer_len_max: int, max_tries: int) -> list[dict[str, Any]]:
     """
         Generates a list of candidates with the methods created above.
     """
@@ -179,7 +176,6 @@ def generate_candidates(seed: dict[str, Any], n: int, spacer_len_min: int, space
     core = normalise(seed["core"])
     cds_start = normalise(seed["cds_start"])
     mutable = seed.get("mutable_regions", [])
-    #standby = random_spacer(standbysize, max_tries)
 
     # Validation 
     if core not in rbs:
@@ -191,12 +187,16 @@ def generate_candidates(seed: dict[str, Any], n: int, spacer_len_min: int, space
         for i in range(frame, len(core) - 2, 3):
             if core[i:i+3] in STOP_CODONS:
                 raise ValueError(f"[{name}] Core '{core}' contains stop codon '{core[i:i+3]}': all candidates would be rejected.")
+    if standby_start > len(flank):
+        raise ValueError(f"[{name}] standby_start={standby_start} exceeds five_prime_flank length ({len(flank)}).")
 
     candidates: list[dict[str, Any]] = []
     attempts   = 0
 
     while len(candidates) < n and attempts < max_tries:
         attempts += 1
+        # five_prime_flank
+        new_flank = mutate_flank(flank, standby_start) if "five_prime_flank" in mutable else flank
 
         # RBS non-core region
         if "rbs" in mutable:
@@ -216,18 +216,17 @@ def generate_candidates(seed: dict[str, Any], n: int, spacer_len_min: int, space
             new_spacer = normalise(seed.get("spacer", ""))
 
         # Junction stop-codon check
-        if junction_has_stop(flank, new_rbs, new_spacer, cds_start):
+        if junction_has_stop(new_flank, new_rbs, new_spacer, cds_start):
             continue
 
         # Build record
         candidates.append({
             "name": f"{name}_c{len(candidates) + 1:04d}",
-            "five_prime_flank": flank,
-            #"stand_by" : _randomise_positions(standby, True),
+            "five_prime_flank": new_flank,
             "rbs": new_rbs,
-            "core": core,
             "spacer": new_spacer,
-            "cds_start": cds_start
+            "cds_start": cds_start,
+            "mutable_regions":  ["five_prime_flank", "rbs", "spacer"]
         })
 
     return candidates
@@ -249,8 +248,9 @@ def main() -> None:
                         help="Output JSON path.")
     parser.add_argument("--n", type=int, default=100,
                         help="Candidates per seed (default: 100).")
-    #parser.add_argument("--standbyN", type=int, default=4,
-                        #help="Standby sequence length (default: 4).")
+    parser.add_argument("--standby-start", type=int, default=0, metavar="N",
+                        help="0-based index: positions before N in five_prime_flank "
+                             "are frozen (default: 0).")
     parser.add_argument("--spacer-len", type=int, nargs=2, default=[4, 7],
                         metavar=("MIN", "MAX"),
                         help="Spacer length range (default: 4 7).")
@@ -279,8 +279,8 @@ def main() -> None:
         print(f"\n[INFO] Seed '{seed['name']}' → generating {args.n} candidates …")
         cands = generate_candidates(
             seed          = seed,
-            #standbysize   = args.standbyN,
             n             = args.n,
+            standby_start = args.standby_start,
             spacer_len_min= sp_min,
             spacer_len_max= sp_max,
             max_tries     = args.max_tries,

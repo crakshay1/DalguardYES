@@ -14,9 +14,7 @@ import orbs_duplex as orbs
 import candidates as candgen
 import riboguard_ga_engine_clean as ga
 
-"""
-@ritar18 @georgyzaouk @PaulVerot03
-"""
+
 # -----------------------------------------------------------------------------
 # Page setup and styling
 # -----------------------------------------------------------------------------
@@ -310,7 +308,7 @@ def run_full_pipeline_cached(
     initial_candidates = candgen.generate_candidates(
         seed=seed_record,
         n=int(candidates_per_seed),
-        # standby_start=int(standby_start),
+        standby_start=int(standby_start),
         spacer_len_min=int(spacer_min),
         spacer_len_max=int(spacer_max),
         max_tries=int(max_tries),

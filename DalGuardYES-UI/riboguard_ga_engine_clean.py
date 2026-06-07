@@ -39,9 +39,6 @@ Notes:
     - Delta-G duplex and standby calculations require ViennaRNA.
     - No pseudo-folding or approximate duplex fallback is used in this version.
     - The code uses RNA internally. DNA T is normalized to RNA U.
-
-
-@ritar18 @georgyzaouk @PaulVerot03
 """
 
 from __future__ import annotations
@@ -53,7 +50,12 @@ import math
 import os
 import random
 import subprocess
-from concurrent.futures import ThreadPoolExecutor
+import multiprocessing as _mp
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+
+# Force fork so workers inherit already-initialized ViennaRNA state and never
+# touch Streamlit's spawn/import machinery.
+_FORK_CTX = _mp.get_context("fork")
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Any
@@ -1086,16 +1088,16 @@ def run_ga(
 
         scored.extend(cached_pairs)
 
-        # Evaluate new candidates in parallel.
-        # ThreadPoolExecutor (not Process) avoids spawn/pickle issues inside Streamlit;
-        # ViennaRNA releases the GIL so threads still give real parallelism.
+        # Evaluate new candidates in parallel using forked processes.
+        # fork inherits already-initialized ViennaRNA state and avoids Streamlit's
+        # spawn/import path that caused BrokenProcessPool on macOS.
         if new_inds:
             tasks = [
                 (ind, orth_anti_sd, wt_anti_sd, default_flank, default_cds_start,
                  wt_penalty_constant, ind.get("id", f"g{gen}_i{idx}"))
                 for idx, ind in new_inds
             ]
-            with ThreadPoolExecutor(max_workers=n_workers) as executor:
+            with ProcessPoolExecutor(max_workers=n_workers, mp_context=_FORK_CTX) as executor:
                 results = list(executor.map(_eval_worker, tasks))
             for (idx, ind), (ev, sites) in zip(new_inds, results):
                 scored.append((ev, ind))
