@@ -1,4 +1,6 @@
-# RiboGuard AI Streamlit Dashboard
+# DalGuardYES Streamlit Dashboard
+**Computational design of RBS architectures for orthogonal anti–Shine-Dalgarno ribosome systems**  
+*IGEM — Université Evry Paris-Saclay*  
 
 This is the simplified all-in-one hackathon app:
 
