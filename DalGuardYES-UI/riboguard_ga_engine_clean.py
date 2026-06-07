@@ -1009,7 +1009,7 @@ def generate_guided_seed_candidates(
 
 def _eval_worker(args: Tuple) -> Tuple[CandidateEval, List[BindingSiteResult]]:
     """Module-level worker so ProcessPoolExecutor can pickle it."""
-    candidate, orth_anti_sd, wt_anti_sd, default_flank, default_cds_start, wt_penalty_constant, cid = args
+    candidate, orth_anti_sd, wt_anti_sd, default_flank, default_cds_start, wt_penalty_constant, cid, r0 = args
     return evaluate_candidate(
         candidate,
         orth_anti_sd=orth_anti_sd,
@@ -1018,6 +1018,7 @@ def _eval_worker(args: Tuple) -> Tuple[CandidateEval, List[BindingSiteResult]]:
         default_cds_start=default_cds_start,
         wt_penalty_constant=wt_penalty_constant,
         candidate_id=cid,
+        r0=r0,
     )
 
 
@@ -1077,20 +1078,14 @@ def run_ga(
     for gen in range(generations):
         scored: List[Tuple[CandidateEval, Dict[str, str]]] = []
 
-        # Split into cached (already evaluated) and new candidates.
+        # Split population into cached (already evaluated) and new candidates.
         cached_pairs: List[Tuple[CandidateEval, Dict[str, str]]] = []
         new_inds: List[Tuple[int, Dict[str, str]]] = []
         for idx, ind in enumerate(population):
-            cid = ind.get("id", f"g{gen}_i{idx}")
-            ev, sites = evaluate_candidate(
-                ind,
-                orth_anti_sd=orth_anti_sd,
-                wt_anti_sd=wt_anti_sd,
-                default_flank=default_flank,
-                default_cds_start=default_cds_start,
-                wt_penalty_constant=wt_penalty_constant,
-                candidate_id=cid,
-                r0=r0,
+            key = (
+                normalize_rna(ind.get("five_prime_flank", default_flank)),
+                normalize_rna(ind.get("rbs", "")),
+                normalize_rna(ind.get("spacer", "")),
             )
             if key in all_evals_by_key:
                 cached_pairs.append((all_evals_by_key[key], ind))
@@ -1100,12 +1095,10 @@ def run_ga(
         scored.extend(cached_pairs)
 
         # Evaluate new candidates in parallel using forked processes.
-        # fork inherits already-initialized ViennaRNA state and avoids Streamlit's
-        # spawn/import path that caused BrokenProcessPool on macOS.
         if new_inds:
             tasks = [
                 (ind, orth_anti_sd, wt_anti_sd, default_flank, default_cds_start,
-                 wt_penalty_constant, ind.get("id", f"g{gen}_i{idx}"))
+                 wt_penalty_constant, ind.get("id", f"g{gen}_i{idx}"), r0)
                 for idx, ind in new_inds
             ]
             with ProcessPoolExecutor(max_workers=n_workers, mp_context=_FORK_CTX) as executor:
