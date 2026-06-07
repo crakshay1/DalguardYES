@@ -759,7 +759,7 @@ with left:
 
     st.json(
         {
-            "seed_rbs": seed.get("rbs"),
+            #"full_rbs": seed_record.get("rbs"),
             "core": seed.get("core"),
             "flank": seed.get("five_prime_flank"),
             "cds_start": seed.get("cds_start"),
