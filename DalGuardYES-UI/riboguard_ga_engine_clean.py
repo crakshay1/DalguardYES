@@ -465,7 +465,7 @@ def dG_standby(mRNA_upstream: str, anti_sd: str) -> float:
 
     energy_after = _eval_structure(mRNA, rRNA, bp_x_after, bp_y_after)
 
-    # Free standby site is not a bonus beyond zero.
+    # dG_standby <= 0: energy gained from standby structure. Subtracted in dG_total.
     return float(min(0.0, energy_before - energy_after))
 
 
@@ -507,7 +507,7 @@ def dG_mrna_unfolding_site(full_seq: str, site_start: int, site_end: int, window
     right = min(len(full_seq), int(site_end) + window)
     local_region = full_seq[left:right]
     _dot, mfe, _backend = fold_sequence(local_region)
-    return max(0.0, -float(mfe))
+    return float(mfe)
 
 
 def cofold_deltaG(utr: str, anti_sd: str) -> float:
@@ -711,11 +711,11 @@ def score_sites_for_asd(
         )
 
         dG_total_site = (
-            dG_duplex_candidate
-            + dG_start
-            + dG_standby
-            + site["dG_spacing"]
-            + dG_unfold
+            dG_duplex_candidate    # negative — SD:aSD duplex stabilises initiation
+            + dG_start             # negative — start codon stabilises initiation
+            - dG_standby           # dG_standby <= 0, subtract to penalise structured standby
+            + site["dG_spacing"]   # positive penalty — bad geometry
+            - dG_unfold            # dG_unfold is negative MFE, subtract to penalise stable mRNA
         )
         tir_site = calculate_tir(dG_total_site)
 
