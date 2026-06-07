@@ -22,6 +22,7 @@ venv/
 .ipynb_checkpoints/
 
 # Project-specific generated outputs
+Cores/output/
 
 # LinearFold compiled binaries and object files
 2ndStruct/LinearFold/bin/

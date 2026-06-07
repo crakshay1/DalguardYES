@@ -217,7 +217,7 @@ def make_seed_with_orbs_duplex(
     tail_nt = max(1, min(int(asd_tail_nt), len(full_seq)))
     start_1based = len(full_seq) - tail_nt + 1
     end_1based = len(full_seq)
-    seq_window = full_seq[start_1based - 1:end_1based]
+    seq_window = full_seq[start_1based - 1 : end_1based]
 
     hits = orbs.window_scan(seq_window, start_1based, int(window_k), float(temp_c))
     merged = orbs.merge_top_hits(hits, seq_window, start_1based, float(temp_c))
@@ -232,7 +232,7 @@ def make_seed_with_orbs_duplex(
         "name": orbs.sanitize_name(name),
         "five_prime_flank": mrna5,
         "canonical_rbs": "",
-        "sequence":orth_asd,
+        "sequence": orth_asd,
         "rbs": orbs.revcomp_rna(best.subseq),
         "core": orbs.revcomp_rna(core.subseq),
         "spacer": "",
@@ -240,28 +240,32 @@ def make_seed_with_orbs_duplex(
         "mutable_regions": ["rbs", "five_prime_flank", "spacer"],
     }
 
-    hits_df = pd.DataFrame([
-        {
-            "abs_start": h.abs_start,
-            "abs_end": h.abs_end,
-            "subseq": h.subseq,
-            "dg_self_duplex": h.dg,
-            "seed_core_rbs": orbs.revcomp_rna(h.subseq),
-        }
-        for h in hits
-    ])
+    hits_df = pd.DataFrame(
+        [
+            {
+                "abs_start": h.abs_start,
+                "abs_end": h.abs_end,
+                "subseq": h.subseq,
+                "dg_self_duplex": h.dg,
+                "seed_core_rbs": orbs.revcomp_rna(h.subseq),
+            }
+            for h in hits
+        ]
+    )
 
-    merged_df = pd.DataFrame([
-        {
-            "abs_start": m.abs_start,
-            "abs_end": m.abs_end,
-            "length": len(m.subseq),
-            "subseq": m.subseq,
-            "dg_self_duplex": m.dg,
-            "seed_rbs": orbs.revcomp_rna(m.subseq),
-        }
-        for m in merged
-    ])
+    merged_df = pd.DataFrame(
+        [
+            {
+                "abs_start": m.abs_start,
+                "abs_end": m.abs_end,
+                "length": len(m.subseq),
+                "subseq": m.subseq,
+                "dg_self_duplex": m.dg,
+                "seed_rbs": orbs.revcomp_rna(m.subseq),
+            }
+            for m in merged
+        ]
+    )
 
     return seed, hits_df, merged_df
 
@@ -306,7 +310,7 @@ def run_full_pipeline_cached(
     initial_candidates = candgen.generate_candidates(
         seed=seed_record,
         n=int(candidates_per_seed),
-        standby_start=int(standby_start),
+        # standby_start=int(standby_start),
         spacer_len_min=int(spacer_min),
         spacer_len_max=int(spacer_max),
         max_tries=int(max_tries),
@@ -603,7 +607,9 @@ if not run_clicked and "dataset" not in st.session_state:
         "then optimize them with the GA/TIR engine."
     )
 
-    vision_image = Path(__file__).parent / "synthetic_biology_optimization_dashboard_ui.png"
+    vision_image = (
+        Path(__file__).parent / "synthetic_biology_optimization_dashboard_ui.png"
+    )
 
     if vision_image.exists():
         st.image(
@@ -616,7 +622,9 @@ if not run_clicked and "dataset" not in st.session_state:
 
 if run_clicked:
     try:
-        with st.spinner("Running full pipeline: ORBS-duplex to candidates.py to GA/TIR optimizer..."):
+        with st.spinner(
+            "Running full pipeline: ORBS-duplex to candidates.py to GA/TIR optimizer..."
+        ):
             dataset = run_full_pipeline_cached(
                 search_sequence=orth_asd,
                 orth_asd=orth_asd,
@@ -810,14 +818,19 @@ with right:
         unsafe_allow_html=True,
     )
 
-    energy_df = pd.DataFrame([
-        {"term": "ΔG duplex", "value": best_row.get("dG_duplex_orth")},
-        {"term": "ΔG start", "value": best_row.get("dG_start")},
-        {"term": "ΔG standby", "value": best_row.get("dG_standby")},
-        {"term": "ΔG spacing", "value": best_row.get("best_dG_spacing")},
-        {"term": "ΔG mRNA unfolding", "value": best_row.get("best_dG_mrna_unfolding")},
-        {"term": "ΔG total", "value": best_row.get("dG_total")},
-    ])
+    energy_df = pd.DataFrame(
+        [
+            {"term": "ΔG duplex", "value": best_row.get("dG_duplex_orth")},
+            {"term": "ΔG start", "value": best_row.get("dG_start")},
+            {"term": "ΔG standby", "value": best_row.get("dG_standby")},
+            {"term": "ΔG spacing", "value": best_row.get("best_dG_spacing")},
+            {
+                "term": "ΔG mRNA unfolding",
+                "value": best_row.get("best_dG_mrna_unfolding"),
+            },
+            {"term": "ΔG total", "value": best_row.get("dG_total")},
+        ]
+    )
 
     st.dataframe(
         energy_df,
@@ -855,9 +868,11 @@ with rank_col:
         "long_range_flag",
     ]
 
-    display_df = all_candidates_df[
-        [c for c in rank_cols if c in all_candidates_df.columns]
-    ].head(int(top_n)).copy()
+    display_df = (
+        all_candidates_df[[c for c in rank_cols if c in all_candidates_df.columns]]
+        .head(int(top_n))
+        .copy()
+    )
 
     display_df.insert(0, "rank", range(1, len(display_df) + 1))
 
@@ -1021,3 +1036,4 @@ with dl_col:
         "Binding-site rows",
         len(dataset.get("allBindingSiteRows", [])),
     )
+

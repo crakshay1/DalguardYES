@@ -53,9 +53,12 @@ import math
 import os
 import random
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Any
+
+import numpy as np
 
 # -------------------------
 # Constants / defaults
@@ -545,6 +548,16 @@ def normalized_affinity_from_dG(dg: float, scale: float = 12.0) -> float:
 # Candidate construction and binding-site scanning
 # -------------------------
 
+_BASE_IDX: Dict[str, int] = {"A": 0, "U": 1, "G": 2, "C": 3}
+_PAIR_E = np.array([
+    # A      U      G      C
+    [ 1.2,  -2.0,   1.2,   1.2],   # A
+    [-2.0,   1.2,  -0.8,   1.2],   # U
+    [ 1.2,  -0.8,   1.2,  -3.0],   # G
+    [ 1.2,   1.2,  -3.0,   1.2],   # C
+], dtype=np.float64)
+
+
 def build_full_sequence(candidate: Dict[str, str], default_flank: str, default_cds_start: str) -> Tuple[str, str, str, str, int, int, int, int]:
     flank = normalize_rna(candidate.get("five_prime_flank", default_flank))
     rbs = normalize_rna(candidate.get("rbs", ""))
@@ -571,65 +584,64 @@ def scan_binding_sites(
     max_sites: int = 12,
 ) -> List[Dict[str, Any]]:
     """
-    Scan possible anti-SD binding sites in the UTR.
-    We use this for binding-site coordinates, spacing penalty, and unfolding windows.
-
-    Note:
-    - dG_duplex is treated as candidate-level in this project.
-    - This scanner is primarily for likely binding coordinates.
+    Scan possible anti-SD binding sites in the UTR using numpy diagonal suffix-sum DP.
+    Replaces the O(m×n×diag) Python loop with O(m×n) vectorized operations.
     """
     utr = normalize_rna(utr)
     anti_sd = normalize_rna(anti_sd)
     anti_rev = anti_sd[::-1]
+
+    if not utr or not anti_rev:
+        return []
+
+    m, n = len(utr), len(anti_rev)
+
+    utr_idx = np.array([_BASE_IDX.get(b, 0) for b in utr], dtype=np.intp)
+    arev_idx = np.array([_BASE_IDX.get(b, 0) for b in anti_rev], dtype=np.intp)
+
+    # Pair energy matrix E[i,j] = energy of pairing utr[i] with anti_rev[j]
+    E = _PAIR_E[np.ix_(utr_idx, arev_idx)]
+
+    # Diagonal suffix sums: S[i,j] = sum of E[i,j] + E[i+1,j+1] + ...
+    # Computed in O(m) passes of numpy slice operations.
+    S = E.copy()
+    for i in range(m - 2, -1, -1):
+        S[i, :n - 1] += S[i + 1, 1:]
+
+    # Overlap at each start position
+    rows = np.arange(m, dtype=np.int32).reshape(-1, 1)
+    cols = np.arange(n, dtype=np.int32).reshape(1, -1)
+    overlap_mat = np.minimum(m - rows, n - cols)
+
+    # Keep only positions with sufficient overlap and net-favorable energy
+    mask = (overlap_mat >= min_overlap) & (S < 0)
+    if not np.any(mask):
+        return []
+
+    vi, vj = np.where(mask)
+    energies   = S[vi, vj]
+    overlaps   = overlap_mat[vi, vj]
+    pair_scores = -energies  # already filtered energy < 0 so scores > 0
+
+    asd_start_5p          = np.clip(n - (vj + overlaps), 0, n)
+    asd_end_5p_exclusive  = np.clip(n - vj,              0, n)
+    aligned_spacing_arr   = (aug_start - vi) - asd_start_5p
+
     raw: List[Dict[str, Any]] = []
+    for k in range(len(vi)):
+        d, spacing = dG_spacing_penalty(float(aligned_spacing_arr[k]))
+        raw.append({
+            "mrna_start":          int(vi[k]),
+            "mrna_end":            int(vi[k]) + int(overlaps[k]),
+            "asd_start_5p":        int(asd_start_5p[k]),
+            "asd_end_5p_exclusive": int(asd_end_5p_exclusive[k]),
+            "overlap":             int(overlaps[k]),
+            "pairing_score":       float(pair_scores[k]),
+            "aligned_spacing":     float(aligned_spacing_arr[k]),
+            "d":                   d,
+            "dG_spacing":          spacing,
+        })
 
-    for mrna_start in range(len(utr)):
-        for asd_start_rev in range(len(anti_rev)):
-            energy = 0.0
-            overlap = 0
-            i, j = mrna_start, asd_start_rev
-
-            while i < len(utr) and j < len(anti_rev):
-                e = pair_energy(utr[i], anti_rev[j])
-                energy += e
-                overlap += 1
-                i += 1
-                j += 1
-
-            if overlap < min_overlap:
-                continue
-
-            # Favorable pairing score: more favorable = higher positive score.
-            pairing_score = max(0.0, -energy)
-            if pairing_score <= 0:
-                continue
-
-            # Convert reversed anti-SD scan coordinates to original 5' coordinates.
-            # Reversed index block: [asd_start_rev, asd_start_rev+overlap)
-            # Original 5' index block:
-            #   start = len(asd) - (asd_start_rev + overlap)
-            #   end   = len(asd) - asd_start_rev
-            asd_start_5p = len(anti_sd) - (asd_start_rev + overlap)
-            asd_end_5p_exclusive = len(anti_sd) - asd_start_rev
-            asd_start_5p = max(0, asd_start_5p)
-            asd_end_5p_exclusive = min(len(anti_sd), asd_end_5p_exclusive)
-
-            aligned_spacing = (aug_start - mrna_start) - asd_start_5p
-            d, spacing = dG_spacing_penalty(aligned_spacing)
-
-            raw.append({
-                "mrna_start": mrna_start,
-                "mrna_end": i,
-                "asd_start_5p": asd_start_5p,
-                "asd_end_5p_exclusive": asd_end_5p_exclusive,
-                "overlap": overlap,
-                "pairing_score": pairing_score,
-                "aligned_spacing": aligned_spacing,
-                "d": d,
-                "dG_spacing": spacing,
-            })
-
-    # Sort by pairing quality, then spacing penalty; remove near-duplicates.
     raw.sort(key=lambda x: (x["pairing_score"], -x["dG_spacing"]), reverse=True)
 
     filtered: List[Dict[str, Any]] = []
@@ -647,6 +659,13 @@ def scan_binding_sites(
 # -------------------------
 # Evaluation
 # -------------------------
+
+def _compute_asd_path(args: Tuple[str, str]) -> Tuple[float, str, float]:
+    """Thread worker: compute duplex dG + standby dG for one anti-SD."""
+    utr_seq, anti_sd = args
+    dg_duplex, backend = delta_g_duplex_whole_utr(utr_seq, anti_sd)
+    dg_sb = dG_standby(utr_seq, anti_sd)
+    return dg_duplex, backend, dg_sb
 
 
 def score_sites_for_asd(
@@ -784,13 +803,14 @@ def evaluate_candidate(
         structure, full_seq, rbs_start, rbs_end, LONG_RANGE_THRESHOLD_NT
     )
 
-    dG_duplex_orth, duplex_backend_orth = delta_g_duplex_whole_utr(utr_seq, orth_anti_sd)
-    dG_duplex_wt, _duplex_backend_wt = delta_g_duplex_whole_utr(utr_seq, wt_anti_sd)
+    # Run orth and WT duplex+standby paths concurrently (ViennaRNA releases GIL).
+    with ThreadPoolExecutor(max_workers=2) as _pool:
+        _f_orth = _pool.submit(_compute_asd_path, (utr_seq, orth_anti_sd))
+        _f_wt   = _pool.submit(_compute_asd_path, (utr_seq, wt_anti_sd))
+        dG_duplex_orth, duplex_backend_orth, dG_standby_orth = _f_orth.result()
+        dG_duplex_wt,   _duplex_backend_wt,  dG_standby_wt   = _f_wt.result()
 
     dG_start = dG_start_codon(full_seq[aug_start:aug_end])
-    # Candidate-level standby terms. Standby depends on the anti-SD, so orthogonal and WT get separate values.
-    dG_standby_orth = dG_standby(utr_seq, orth_anti_sd)
-    dG_standby_wt = dG_standby(utr_seq, wt_anti_sd)
 
     # Orthogonal and WT TIR are calculated with the same binding-site logic.
     orth_tir, dG_total_orth, best_dG_spacing, best_dG_unfold, orth_sites = score_sites_for_asd(
@@ -981,6 +1001,20 @@ def generate_guided_seed_candidates(
 # GA main loop
 # -------------------------
 
+def _eval_worker(args: Tuple) -> Tuple[CandidateEval, List[BindingSiteResult]]:
+    """Module-level worker so ProcessPoolExecutor can pickle it."""
+    candidate, orth_anti_sd, wt_anti_sd, default_flank, default_cds_start, wt_penalty_constant, cid = args
+    return evaluate_candidate(
+        candidate,
+        orth_anti_sd=orth_anti_sd,
+        wt_anti_sd=wt_anti_sd,
+        default_flank=default_flank,
+        default_cds_start=default_cds_start,
+        wt_penalty_constant=wt_penalty_constant,
+        candidate_id=cid,
+    )
+
+
 def run_ga(
     initial_candidates: List[Dict[str, str]],
     orth_anti_sd: str = DEFAULT_ORTH_ASD,
@@ -992,6 +1026,7 @@ def run_ga(
     elite_fraction: float = 0.20,
     wt_penalty_constant: float = DEFAULT_WT_PENALTY_CONSTANT,
     seed: int = 7,
+    max_workers: Optional[int] = None,
 ) -> Tuple[List[CandidateEval], List[Dict[str, Any]], List[BindingSiteResult], List[Dict[str, str]]]:
     """
     Returns:
@@ -1028,27 +1063,46 @@ def run_ga(
     all_evals_by_key: Dict[Tuple[str, str, str], CandidateEval] = {}
     all_binding_sites: List[BindingSiteResult] = []
     history: List[Dict[str, Any]] = []
+    seen_keys: set = set()
+
+    n_workers = max_workers or max(1, (os.cpu_count() or 2) - 1)
 
     for gen in range(generations):
         scored: List[Tuple[CandidateEval, Dict[str, str]]] = []
 
+        # Split into cached (already evaluated) and new candidates.
+        cached_pairs: List[Tuple[CandidateEval, Dict[str, str]]] = []
+        new_inds: List[Tuple[int, Dict[str, str]]] = []
         for idx, ind in enumerate(population):
-            cid = ind.get("id", f"g{gen}_i{idx}")
-            ev, sites = evaluate_candidate(
-                ind,
-                orth_anti_sd=orth_anti_sd,
-                wt_anti_sd=wt_anti_sd,
-                default_flank=default_flank,
-                default_cds_start=default_cds_start,
-                wt_penalty_constant=wt_penalty_constant,
-                candidate_id=cid,
+            key = (
+                normalize_rna(ind.get("five_prime_flank", default_flank)),
+                normalize_rna(ind.get("rbs", "")),
+                normalize_rna(ind.get("spacer", "")),
             )
-            scored.append((ev, ind))
-            all_binding_sites.extend(sites)
+            if key in all_evals_by_key:
+                cached_pairs.append((all_evals_by_key[key], ind))
+            else:
+                new_inds.append((idx, ind))
 
-            key = (ev.five_prime_flank, ev.rbs, ev.spacer)
-            if key not in all_evals_by_key or ev.fitness_for_selection > all_evals_by_key[key].fitness_for_selection:
-                all_evals_by_key[key] = ev
+        scored.extend(cached_pairs)
+
+        # Evaluate new candidates in parallel.
+        # ThreadPoolExecutor (not Process) avoids spawn/pickle issues inside Streamlit;
+        # ViennaRNA releases the GIL so threads still give real parallelism.
+        if new_inds:
+            tasks = [
+                (ind, orth_anti_sd, wt_anti_sd, default_flank, default_cds_start,
+                 wt_penalty_constant, ind.get("id", f"g{gen}_i{idx}"))
+                for idx, ind in new_inds
+            ]
+            with ThreadPoolExecutor(max_workers=n_workers) as executor:
+                results = list(executor.map(_eval_worker, tasks))
+            for (idx, ind), (ev, sites) in zip(new_inds, results):
+                scored.append((ev, ind))
+                all_binding_sites.extend(sites)
+                key = (ev.five_prime_flank, ev.rbs, ev.spacer)
+                if key not in all_evals_by_key or ev.fitness_for_selection > all_evals_by_key[key].fitness_for_selection:
+                    all_evals_by_key[key] = ev
 
         scored.sort(key=lambda x: x[0].fitness_for_selection, reverse=True)
         evals = [x[0] for x in scored]
@@ -1070,13 +1124,17 @@ def run_ga(
         elite_count = max(4, int(population_size * elite_fraction))
         elites = [ind for _ev, ind in scored[:elite_count]]
 
-        # Create next generation.
+        # Create next generation with deduplication via seen_keys.
         next_pop: List[Dict[str, str]] = []
-        # keep exact elites
         for i, e in enumerate(elites):
             kept = dict(e)
             kept["id"] = f"g{gen+1}_elite_{i}"
             next_pop.append(kept)
+            seen_keys.add((
+                normalize_rna(kept.get("five_prime_flank", default_flank)),
+                normalize_rna(kept.get("rbs", "")),
+                normalize_rna(kept.get("spacer", "")),
+            ))
 
         while len(next_pop) < population_size:
             if random.random() < 0.35 and len(elites) >= 2:
@@ -1085,6 +1143,14 @@ def run_ga(
             else:
                 child = dict(random.choice(elites))
             child = mutate_candidate(child, mutate_flank=True)
+            child_key = (
+                normalize_rna(child.get("five_prime_flank", default_flank)),
+                normalize_rna(child.get("rbs", "")),
+                normalize_rna(child.get("spacer", "")),
+            )
+            if child_key in seen_keys:
+                continue
+            seen_keys.add(child_key)
             child["id"] = f"g{gen+1}_child_{len(next_pop)}"
             next_pop.append(child)
 
@@ -1321,6 +1387,8 @@ def main() -> None:
     parser.add_argument("--population", type=int, default=80)
     parser.add_argument("--wt-penalty", type=float, default=DEFAULT_WT_PENALTY_CONSTANT)
     parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument("--workers", type=int, default=None, help="Parallel worker processes (default: CPU count - 1)")
+    parser.add_argument("--top-n", type=int, default=20, help="Number of top candidates to include in output dataset")
     args = parser.parse_args()
 
     initial_candidates = load_initial_candidates(args.seeds)
@@ -1337,6 +1405,7 @@ def main() -> None:
         population_size=args.population,
         wt_penalty_constant=args.wt_penalty,
         seed=args.seed,
+        max_workers=args.workers,
     )
 
     dataset = build_dashboard_dataset(
@@ -1350,7 +1419,7 @@ def main() -> None:
             "targetExpression": "High",
             "wtPenaltyConstant": args.wt_penalty,
         },
-        top_n=20,
+        top_n=args.top_n,
     )
     write_outputs(args.out, evals, history, binding_sites, dataset)
 
