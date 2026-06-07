@@ -1074,37 +1074,6 @@ def run_ga(
 
     n_workers = max_workers or max(1, (os.cpu_count() or 2) - 1)
 
-    with ProcessPoolExecutor(max_workers=n_workers) as executor:
-        for gen in range(generations):
-            tasks = [
-                (
-                    ind,
-                    orth_anti_sd,
-                    wt_anti_sd,
-                    default_flank,
-                    default_cds_start,
-                    wt_penalty_constant,
-                    ind.get("id", f"g{gen}_i{idx}"),
-                )
-                for idx, ind in enumerate(population)
-            ]
-
-            results = list(executor.map(_eval_worker, tasks))
-            scored: List[Tuple[CandidateEval, Dict[str, str]]] = []
-
-            for (ev, sites), ind in zip(results, population):
-                scored.append((ev, ind))
-                all_binding_sites.extend(sites)
-
-        history.append({
-            "generation": gen,
-            "best": best.fitness_for_selection,
-            "avg": avg_score,
-            "bestTIR": best.orth_tir,
-            "avgTIR": avg_tir,
-            "bestWT": best.wt_tir,
-            "bestRBSAccess": best.rbs_access,
-        })
     seen_keys: set = set()
 
     with ProcessPoolExecutor(max_workers=n_workers) as executor:
@@ -1156,28 +1125,18 @@ def run_ga(
             elite_count = max(4, int(population_size * elite_fraction))
             elites = [ind for _ev, ind in scored[:elite_count]]
 
-        population = next_pop
             # Create next generation.
             next_pop: List[Dict[str, str]] = []
             for i, e in enumerate(elites):
                 kept = dict(e)
                 kept["id"] = f"g{gen+1}_elite_{i}"
                 next_pop.append(kept)
-
-            while len(next_pop) < population_size:
-                if random.random() < 0.35 and len(elites) >= 2:
-                    p1, p2 = random.sample(elites, 2)
-                    child = crossover(p1, p2)
-                else:
-                    child = dict(random.choice(elites))
-                child = mutate_candidate(child, mutate_flank=True)
                 elite_key = (
                     normalize_rna(kept.get("five_prime_flank", default_flank)),
                     normalize_rna(kept.get("rbs", "")),
                     normalize_rna(kept.get("spacer", "")),
                 )
                 seen_keys.add(elite_key)
-                next_pop.append(kept)
 
             while len(next_pop) < population_size:
                 for _ in range(3):
@@ -1434,6 +1393,7 @@ def main() -> None:
     parser.add_argument("--wt-penalty", type=float, default=DEFAULT_WT_PENALTY_CONSTANT)
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--workers", type=int, default=None, help="Parallel worker processes (default: CPU count - 1)")
+    parser.add_argument("--top-n", type=int, default=20, help="Number of top candidates to include in output dataset")
     args = parser.parse_args()
 
     initial_candidates = load_initial_candidates(args.seeds)
@@ -1464,7 +1424,7 @@ def main() -> None:
             "targetExpression": "High",
             "wtPenaltyConstant": args.wt_penalty,
         },
-        top_n=20,
+        top_n=args.top_n,
     )
     write_outputs(args.out, evals, history, binding_sites, dataset)
 
