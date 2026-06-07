@@ -51,9 +51,12 @@ import os
 import random
 import subprocess
 from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Any
+
+import numpy as np
 
 # -------------------------
 # Constants / defaults
@@ -92,6 +95,15 @@ START_CODON_DG = {
 
 # Long-range filter
 LONG_RANGE_THRESHOLD_NT = 35
+
+# Numpy lookup tables for vectorized scan_binding_sites
+_BASE_IDX: Dict[str, int] = {'A': 0, 'U': 1, 'G': 2, 'C': 3}
+_PAIR_E = np.array([
+    [ 1.2, -2.0,  1.2,  1.2],  # A
+    [-2.0,  1.2, -0.8,  1.2],  # U
+    [ 1.2, -0.8,  1.2, -3.0],  # G
+    [ 1.2,  1.2, -3.0,  1.2],  # C
+], dtype=np.float32)
 
 
 # -------------------------
@@ -260,7 +272,9 @@ def fold_sequence(sequence: str) -> Tuple[str, float, str]:
             "./LinearFold/bin/linearfold_c."
         ) from exc
 
-    dot, mfe = RNA.fold(seq)
+    md = RNA.md()
+    fc = RNA.fold_compound(seq, md)
+    dot, mfe = fc.mfe()
     if len(dot) != len(seq):
         raise RuntimeError("ViennaRNA returned a structure with unexpected length.")
     return dot, float(mfe), "ViennaRNA"
@@ -520,9 +534,13 @@ def cofold_deltaG(utr: str, anti_sd: str) -> float:
     if not utr or not anti_sd:
         return 0.0
 
-    struct_complex, mfe_complex = RNA.cofold(f"{utr}&{anti_sd}")
-    struct_utr, mfe_utr = RNA.fold(utr)
-    struct_asd, mfe_asd = RNA.fold(anti_sd)
+    md = RNA.md()
+    fc_complex = RNA.fold_compound(utr + "&" + anti_sd, md)
+    _, mfe_complex = fc_complex.mfe()
+    fc_utr = RNA.fold_compound(utr, md)
+    _, mfe_utr = fc_utr.mfe()
+    fc_asd = RNA.fold_compound(anti_sd, md)
+    _, mfe_asd = fc_asd.mfe()
     return float(mfe_complex - mfe_utr - mfe_asd)
 
 
@@ -579,55 +597,67 @@ def scan_binding_sites(
     utr = normalize_rna(utr)
     anti_sd = normalize_rna(anti_sd)
     anti_rev = anti_sd[::-1]
+    m, n = len(utr), len(anti_rev)
+    if m == 0 or n == 0:
+        return []
+
+    # Build pair energy matrix E[i, j] = pair_energy(utr[i], anti_rev[j])
+    u_idx = np.array([_BASE_IDX.get(b, 0) for b in utr], dtype=np.int32)
+    a_idx = np.array([_BASE_IDX.get(b, 0) for b in anti_rev], dtype=np.int32)
+    E = _PAIR_E[u_idx[:, None], a_idx[None, :]]  # (m, n)
+
+    # Diagonal suffix-sum DP:
+    # S[i, j] = sum of E[i+t, j+t] for t in range(min(m-i, n-j))
+    # Recurrence: S[i, j] = E[i, j] + S[i+1, j+1]
+    # Process anti-diagonals from bottom-right to top-left.
+    S = np.zeros((m + 1, n + 1), dtype=np.float32)
+    for k in range(m + n - 2, -1, -1):
+        i_vals = np.arange(max(0, k - n + 1), min(m, k + 1))
+        j_vals = k - i_vals
+        S[i_vals, j_vals] = E[i_vals, j_vals] + S[i_vals + 1, j_vals + 1]
+
+    # Overlap at each starting point
+    i_grid = np.arange(m, dtype=np.int32)[:, None]
+    j_grid = np.arange(n, dtype=np.int32)[None, :]
+    overlap_grid = np.minimum(m - i_grid, n - j_grid)
+
+    pairing_grid = np.maximum(0.0, -S[:m, :n])
+    mask = (overlap_grid >= min_overlap) & (pairing_grid > 0)
+
+    valid_i, valid_j = np.where(mask)
+    if len(valid_i) == 0:
+        return []
+
+    pairing_scores = pairing_grid[valid_i, valid_j]
+    overlaps = overlap_grid[valid_i, valid_j]
+
     raw: List[Dict[str, Any]] = []
+    for idx in range(len(valid_i)):
+        mrna_start = int(valid_i[idx])
+        asd_start_rev = int(valid_j[idx])
+        overlap = int(overlaps[idx])
+        pairing_score = float(pairing_scores[idx])
 
-    for mrna_start in range(len(utr)):
-        for asd_start_rev in range(len(anti_rev)):
-            energy = 0.0
-            overlap = 0
-            i, j = mrna_start, asd_start_rev
+        asd_start_5p = len(anti_sd) - (asd_start_rev + overlap)
+        asd_end_5p_exclusive = len(anti_sd) - asd_start_rev
+        asd_start_5p = max(0, asd_start_5p)
+        asd_end_5p_exclusive = min(len(anti_sd), asd_end_5p_exclusive)
 
-            while i < len(utr) and j < len(anti_rev):
-                e = pair_energy(utr[i], anti_rev[j])
-                energy += e
-                overlap += 1
-                i += 1
-                j += 1
+        aligned_spacing = (aug_start - mrna_start) - asd_start_5p
+        d, spacing = dG_spacing_penalty(aligned_spacing)
 
-            if overlap < min_overlap:
-                continue
+        raw.append({
+            "mrna_start": mrna_start,
+            "mrna_end": mrna_start + overlap,
+            "asd_start_5p": asd_start_5p,
+            "asd_end_5p_exclusive": asd_end_5p_exclusive,
+            "overlap": overlap,
+            "pairing_score": pairing_score,
+            "aligned_spacing": aligned_spacing,
+            "d": d,
+            "dG_spacing": spacing,
+        })
 
-            # Favorable pairing score: more favorable = higher positive score.
-            pairing_score = max(0.0, -energy)
-            if pairing_score <= 0:
-                continue
-
-            # Convert reversed anti-SD scan coordinates to original 5' coordinates.
-            # Reversed index block: [asd_start_rev, asd_start_rev+overlap)
-            # Original 5' index block:
-            #   start = len(asd) - (asd_start_rev + overlap)
-            #   end   = len(asd) - asd_start_rev
-            asd_start_5p = len(anti_sd) - (asd_start_rev + overlap)
-            asd_end_5p_exclusive = len(anti_sd) - asd_start_rev
-            asd_start_5p = max(0, asd_start_5p)
-            asd_end_5p_exclusive = min(len(anti_sd), asd_end_5p_exclusive)
-
-            aligned_spacing = (aug_start - mrna_start) - asd_start_5p
-            d, spacing = dG_spacing_penalty(aligned_spacing)
-
-            raw.append({
-                "mrna_start": mrna_start,
-                "mrna_end": i,
-                "asd_start_5p": asd_start_5p,
-                "asd_end_5p_exclusive": asd_end_5p_exclusive,
-                "overlap": overlap,
-                "pairing_score": pairing_score,
-                "aligned_spacing": aligned_spacing,
-                "d": d,
-                "dG_spacing": spacing,
-            })
-
-    # Sort by pairing quality, then spacing penalty; remove near-duplicates.
     raw.sort(key=lambda x: (x["pairing_score"], -x["dG_spacing"]), reverse=True)
 
     filtered: List[Dict[str, Any]] = []
@@ -744,6 +774,32 @@ def score_sites_for_asd(
     )
 
 
+def _compute_asd_path(
+    utr_seq: str,
+    full_seq: str,
+    anti_sd: str,
+    aug_start: int,
+    dG_start: float,
+    candidate_id: str,
+    anti_sd_type: str,
+) -> Tuple[float, float, float, float, float, float, List[BindingSiteResult]]:
+    dG_duplex, _ = delta_g_duplex_whole_utr(utr_seq, anti_sd)
+    dG_standby_val = dG_standby(utr_seq, anti_sd)
+    tir, dG_total, best_spacing, best_unfold, sites = score_sites_for_asd(
+        candidate_id=candidate_id,
+        anti_sd_type=anti_sd_type,
+        full_seq=full_seq,
+        utr_seq=utr_seq,
+        anti_sd=anti_sd,
+        aug_start=aug_start,
+        dG_duplex_candidate=dG_duplex,
+        dG_start=dG_start,
+        dG_standby=dG_standby_val,
+        collect_sites=True,
+    )
+    return dG_duplex, dG_standby_val, tir, dG_total, best_spacing, best_unfold, sites
+
+
 def evaluate_candidate(
     candidate: Dict[str, str],
     orth_anti_sd: str,
@@ -782,41 +838,16 @@ def evaluate_candidate(
         structure, full_seq, rbs_start, rbs_end, LONG_RANGE_THRESHOLD_NT
     )
 
-    dG_duplex_orth, duplex_backend_orth = delta_g_duplex_whole_utr(utr_seq, orth_anti_sd)
-    dG_duplex_wt, _duplex_backend_wt = delta_g_duplex_whole_utr(utr_seq, wt_anti_sd)
-
     dG_start = dG_start_codon(full_seq[aug_start:aug_end])
-    # Candidate-level standby terms. Standby depends on the anti-SD, so orthogonal and WT get separate values.
-    dG_standby_orth = dG_standby(utr_seq, orth_anti_sd)
-    dG_standby_wt = dG_standby(utr_seq, wt_anti_sd)
 
-    # Orthogonal and WT TIR are calculated with the same binding-site logic.
-    orth_tir, dG_total_orth, best_dG_spacing, best_dG_unfold, orth_sites = score_sites_for_asd(
-        candidate_id=cid,
-        anti_sd_type="orthogonal",
-        full_seq=full_seq,
-        utr_seq=utr_seq,
-        anti_sd=orth_anti_sd,
-        aug_start=aug_start,
-        dG_duplex_candidate=dG_duplex_orth,
-        dG_start=dG_start,
-        dG_standby=dG_standby_orth,
-        collect_sites=True,
-    )
+    # Run orth and WT paths concurrently (ViennaRNA releases the GIL).
+    with ThreadPoolExecutor(max_workers=2) as tex:
+        orth_fut = tex.submit(_compute_asd_path, utr_seq, full_seq, orth_anti_sd, aug_start, dG_start, cid, "orthogonal")
+        wt_fut   = tex.submit(_compute_asd_path, utr_seq, full_seq, wt_anti_sd,   aug_start, dG_start, cid, "wt")
+        dG_duplex_orth, dG_standby_orth, orth_tir, dG_total_orth, best_dG_spacing, best_dG_unfold, orth_sites = orth_fut.result()
+        dG_duplex_wt,   dG_standby_wt,   wt_tir,   dG_total_wt,  _,               _,             wt_sites   = wt_fut.result()
 
-    wt_tir, dG_total_wt, _wt_spacing, _wt_unfold, wt_sites = score_sites_for_asd(
-        candidate_id=cid,
-        anti_sd_type="wt",
-        full_seq=full_seq,
-        utr_seq=utr_seq,
-        anti_sd=wt_anti_sd,
-        aug_start=aug_start,
-        dG_duplex_candidate=dG_duplex_wt,
-        dG_start=dG_start,
-        dG_standby=dG_standby_wt,
-        collect_sites=True,
-    )
-
+    duplex_backend_orth = "ViennaRNA cofold"
     site_results = orth_sites + wt_sites
 
     t_score = orth_tir - wt_penalty_constant * wt_tir
@@ -1065,6 +1096,42 @@ def run_ga(
                 scored.append((ev, ind))
                 all_binding_sites.extend(sites)
 
+        history.append({
+            "generation": gen,
+            "best": best.fitness_for_selection,
+            "avg": avg_score,
+            "bestTIR": best.orth_tir,
+            "avgTIR": avg_tir,
+            "bestWT": best.wt_tir,
+            "bestRBSAccess": best.rbs_access,
+        })
+    seen_keys: set = set()
+
+    with ProcessPoolExecutor(max_workers=n_workers) as executor:
+        for gen in range(generations):
+            cached_scored = []
+            tasks = []
+            task_inds = []
+
+            for idx, ind in enumerate(population):
+                key = (
+                    normalize_rna(ind.get("five_prime_flank", default_flank)),
+                    normalize_rna(ind.get("rbs", "")),
+                    normalize_rna(ind.get("spacer", "")),
+                )
+                cid = ind.get("id", f"g{gen}_i{idx}")
+                if key in all_evals_by_key:
+                    cached_scored.append((all_evals_by_key[key], ind))
+                else:
+                    tasks.append((ind, orth_anti_sd, wt_anti_sd, default_flank, default_cds_start, wt_penalty_constant, cid))
+                    task_inds.append(ind)
+
+            results = list(executor.map(_eval_worker, tasks)) if tasks else []
+            scored: List[Tuple[CandidateEval, Dict[str, str]]] = list(cached_scored)
+
+            for (ev, sites), ind in zip(results, task_inds):
+                scored.append((ev, ind))
+                all_binding_sites.extend(sites)
                 key = (ev.five_prime_flank, ev.rbs, ev.spacer)
                 if key not in all_evals_by_key or ev.fitness_for_selection > all_evals_by_key[key].fitness_for_selection:
                     all_evals_by_key[key] = ev
@@ -1089,6 +1156,7 @@ def run_ga(
             elite_count = max(4, int(population_size * elite_fraction))
             elites = [ind for _ev, ind in scored[:elite_count]]
 
+        population = next_pop
             # Create next generation.
             next_pop: List[Dict[str, str]] = []
             for i, e in enumerate(elites):
@@ -1103,6 +1171,30 @@ def run_ga(
                 else:
                     child = dict(random.choice(elites))
                 child = mutate_candidate(child, mutate_flank=True)
+                elite_key = (
+                    normalize_rna(kept.get("five_prime_flank", default_flank)),
+                    normalize_rna(kept.get("rbs", "")),
+                    normalize_rna(kept.get("spacer", "")),
+                )
+                seen_keys.add(elite_key)
+                next_pop.append(kept)
+
+            while len(next_pop) < population_size:
+                for _ in range(3):
+                    if random.random() < 0.35 and len(elites) >= 2:
+                        p1, p2 = random.sample(elites, 2)
+                        child = crossover(p1, p2)
+                    else:
+                        child = dict(random.choice(elites))
+                    child = mutate_candidate(child, mutate_flank=True)
+                    child_key = (
+                        normalize_rna(child.get("five_prime_flank", default_flank)),
+                        normalize_rna(child.get("rbs", "")),
+                        normalize_rna(child.get("spacer", "")),
+                    )
+                    if child_key not in seen_keys:
+                        break
+                seen_keys.add(child_key)
                 child["id"] = f"g{gen+1}_child_{len(next_pop)}"
                 next_pop.append(child)
 

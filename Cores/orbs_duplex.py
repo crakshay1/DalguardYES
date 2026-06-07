@@ -25,6 +25,8 @@ from datetime import datetime
 from dataclasses import dataclass
 import argparse
 import json
+import os
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import re
 
@@ -121,24 +123,27 @@ class MergedHit:
 
 """
 
-slides a window of size k across the input sequence, calculates the duplex energy 
+slides a window of size k across the input sequence, calculates the duplex energy
 for the k-mer and its reverse complement for each window subsequence.
-Returns a list of WindowHit objects sorted by increasing duplex energy 
+Returns a list of WindowHit objects sorted by increasing duplex energy
 (so the best/most stable hits are first)
 
 """
+def _score_kmer(args):
+    i, sub, abs_offset, k, temp = args
+    return WindowHit(
+        abs_start=abs_offset + i,
+        abs_end=abs_offset + i + k - 1,
+        subseq=sub,
+        dg=duplex_dg(sub, revcomp_rna(sub), temp),
+    )
+
+
 def window_scan(seq: str, abs_offset: int, k: int, temp: float) -> list[WindowHit]:
-    hits = []
-    for i in range(len(seq) - k + 1):
-        sub = seq[i:i + k]
-        hits.append(
-            WindowHit(
-                abs_start=abs_offset + i,
-                abs_end=abs_offset + i + k - 1,
-                subseq=sub,
-                dg=duplex_dg(sub, revcomp_rna(sub), temp),
-            )
-        )
+    tasks = [(i, seq[i:i+k], abs_offset, k, temp) for i in range(len(seq) - k + 1)]
+    n_workers = max(1, (os.cpu_count() or 2) - 1)
+    with ThreadPoolExecutor(max_workers=n_workers) as ex:
+        hits = list(ex.map(_score_kmer, tasks))
     hits.sort(key=lambda h: h.dg)
     return hits
 
