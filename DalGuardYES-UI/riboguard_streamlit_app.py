@@ -428,7 +428,7 @@ def make_downloads(dataset: Dict[str, Any]) -> None:
             data=json.dumps(dataset, indent=2),
             file_name="shine_dalguardyes_dataset.json",
             mime="application/json",
-            use_container_width=True,
+            width="stretch",
         )
 
     with col2:
@@ -437,7 +437,7 @@ def make_downloads(dataset: Dict[str, Any]) -> None:
             data=candidates_df.to_csv(index=False),
             file_name="shine_dalguardyes_candidates.csv",
             mime="text/csv",
-            use_container_width=True,
+            width="stretch",
             disabled=candidates_df.empty,
         )
 
@@ -447,7 +447,7 @@ def make_downloads(dataset: Dict[str, Any]) -> None:
             data=binding_df.to_csv(index=False),
             file_name="shine_dalguardyes_binding_sites.csv",
             mime="text/csv",
-            use_container_width=True,
+            width="stretch",
             disabled=binding_df.empty,
         )
 
@@ -580,7 +580,7 @@ with st.sidebar.expander("GA optimizer settings", expanded=True):
 run_clicked = st.sidebar.button(
     "Run Optimization",
     type="primary",
-    use_container_width=True,
+    width="stretch",
 )
 
 
@@ -613,13 +613,30 @@ if not run_clicked and "dataset" not in st.session_state:
         st.image(
             str(vision_image),
             caption="Target dashboard vision",
-            use_container_width=True,
+            width="stretch",
         )
 
     st.stop()
 
 if run_clicked:
     try:
+        import time as _time
+        import streamlit.components.v1 as _components
+
+        _timer_placeholder = st.empty()
+        _components.html(
+            """
+            <script>
+              var _s = 0;
+              var _el = document.getElementById('_rg_timer');
+              setInterval(function(){ _el.innerText = '⏱ ' + (++_s) + 's elapsed'; }, 1000);
+            </script>
+            <span id="_rg_timer" style="color:#888;font-size:0.85em;">⏱ 0s elapsed</span>
+            """,
+            height=28,
+        )
+        _t0 = _time.time()
+
         with st.spinner(
             "Running full pipeline: ORBS-duplex to candidates.py to GA/TIR optimizer..."
         ):
@@ -646,6 +663,8 @@ if run_clicked:
                 top_n=int(top_n),
             )
 
+        _elapsed = _time.time() - _t0
+        _timer_placeholder.success(f"⏱ Completed in {_elapsed:.1f}s")
         st.session_state["dataset"] = dataset
 
     except Exception as exc:
@@ -778,7 +797,7 @@ with left:
     with st.expander("View ORBS-duplex merged hits"):
         st.dataframe(
             to_df(dataset["pipeline"].get("orbsMergedHits", [])),
-            use_container_width=True,
+            width="stretch",
         )
 
 with middle:
@@ -808,7 +827,7 @@ with middle:
             legend=dict(orientation="h"),
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
 with right:
     st.markdown(
@@ -833,7 +852,7 @@ with right:
     st.dataframe(
         energy_df,
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
     )
 
 
@@ -877,7 +896,7 @@ with rank_col:
     st.dataframe(
         display_df,
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
         height=360,
     )
 
@@ -912,7 +931,7 @@ with rank_col:
             st.dataframe(
                 sub[[c for c in keep_cols if c in sub.columns]],
                 hide_index=True,
-                use_container_width=True,
+                width="stretch",
             )
 
 with site_col:
@@ -942,7 +961,7 @@ with site_col:
     st.dataframe(
         best_sites[[c for c in site_cols if c in best_sites.columns]],
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
         height=255,
     )
 
@@ -979,16 +998,26 @@ with land_col:
     )
 
     if not scatter_df.empty:
+        color_by = st.radio(
+            "Colour by",
+            options=["Generation", "Fitness"],
+            horizontal=True,
+            label_visibility="collapsed",
+        )
+        color_col = "generation" if color_by == "Generation" else "fitness"
+        color_scale = "Viridis" if color_by == "Generation" else "Reds"
+
         fig = px.scatter(
             scatter_df,
             x="wtLeakage",
             y="binding",
-            color="fitness",
-            color_continuous_scale="Reds",
-            hover_data=["rbs", "spacer"],
+            color=color_col,
+            color_continuous_scale=color_scale,
+            hover_data=["rbs", "spacer", "fitness", "generation"],
             labels={
                 "wtLeakage": "WT TIR / leakage",
                 "binding": "Orthogonal TIR",
+                "generation": "Generation",
                 "fitness": "Fitness",
             },
             height=360,
@@ -1003,7 +1032,7 @@ with land_col:
             margin=dict(l=10, r=10, t=10, b=10),
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
 with dl_col:
     st.markdown(

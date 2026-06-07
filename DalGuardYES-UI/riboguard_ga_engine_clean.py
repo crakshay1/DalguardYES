@@ -1266,6 +1266,16 @@ def candidate_to_dashboard_dict(e: CandidateEval) -> Dict[str, Any]:
     }
 
 
+def _generation_from_id(candidate_id: str) -> int:
+    """Parse generation number from ids like 'g5_child_3' or 'g0_i2'; seeds → 0."""
+    if candidate_id.startswith("g"):
+        try:
+            return int(candidate_id.split("_")[0][1:])
+        except (ValueError, IndexError):
+            pass
+    return 0
+
+
 def build_dashboard_dataset(
     evals: List[CandidateEval],
     history: List[Dict[str, Any]],
@@ -1311,6 +1321,7 @@ def build_dashboard_dataset(
                 "rbs": e.rbs,
                 "spacer": e.spacer,
                 "fitness": e.fitness,
+                "generation": _generation_from_id(e.candidate_id),
             }
             for e in evals
         ],
