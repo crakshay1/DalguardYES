@@ -290,6 +290,7 @@ def run_full_pipeline_cached(
     wt_penalty_constant: float,
     rng_seed: int,
     top_n: int,
+    r0: float,
 ) -> Dict[str, Any]:
     """ORBS-duplex -> candidates.py -> GA optimizer -> dashboard dataset."""
     random.seed(int(rng_seed))
@@ -334,6 +335,7 @@ def run_full_pipeline_cached(
         elite_fraction=float(elite_fraction),
         wt_penalty_constant=float(wt_penalty_constant),
         seed=int(rng_seed),
+        r0=float(r0),
     )
 
     dataset = ga.build_dashboard_dataset(
@@ -577,6 +579,14 @@ with st.sidebar.expander("GA optimizer settings", expanded=True):
         step=5,
     )
 
+    r0 = st.number_input(
+        "TIR prefactor R₀",
+        min_value=1.0,
+        value=2500.0,
+        step=100.0,
+        help="Salis model prefactor: TIR = R₀ × exp(−ΔG_total / RT)",
+    )
+
 run_clicked = st.sidebar.button(
     "Run Optimization",
     type="primary",
@@ -661,6 +671,7 @@ if run_clicked:
                 wt_penalty_constant=float(wt_penalty_constant),
                 rng_seed=int(rng_seed),
                 top_n=int(top_n),
+                r0=float(r0),
             )
 
         _elapsed = _time.time() - _t0

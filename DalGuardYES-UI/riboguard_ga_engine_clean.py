@@ -681,6 +681,7 @@ def score_sites_for_asd(
     dG_start: float,
     dG_standby: float,
     collect_sites: bool = True,
+    r0: float = R0,
 ) -> Tuple[float, float, float, float, List[BindingSiteResult]]:
     """
     Score all possible binding sites for one anti-SD.
@@ -717,7 +718,7 @@ def score_sites_for_asd(
             + site["dG_spacing"]   # positive penalty — bad geometry
             - dG_unfold            # dG_unfold is negative MFE, subtract to penalise stable mRNA
         )
-        tir_site = calculate_tir(dG_total_site)
+        tir_site = calculate_tir(dG_total_site, r0=r0)
 
         rows.append({
             **site,
@@ -775,6 +776,7 @@ def evaluate_candidate(
     default_cds_start: str = DEFAULT_CDS_START,
     wt_penalty_constant: float = DEFAULT_WT_PENALTY_CONSTANT,
     candidate_id: Optional[str] = None,
+    r0: float = R0,
 ) -> Tuple[CandidateEval, List[BindingSiteResult]]:
     """
     Evaluate one candidate using:
@@ -826,6 +828,7 @@ def evaluate_candidate(
         dG_start=dG_start,
         dG_standby=dG_standby_orth,
         collect_sites=True,
+        r0=r0,
     )
 
     wt_tir, dG_total_wt, _wt_spacing, _wt_unfold, wt_sites = score_sites_for_asd(
@@ -839,6 +842,7 @@ def evaluate_candidate(
         dG_start=dG_start,
         dG_standby=dG_standby_wt,
         collect_sites=True,
+        r0=r0,
     )
 
     site_results = orth_sites + wt_sites
@@ -1029,6 +1033,7 @@ def run_ga(
     wt_penalty_constant: float = DEFAULT_WT_PENALTY_CONSTANT,
     seed: int = 7,
     max_workers: Optional[int] = None,
+    r0: float = R0,
 ) -> Tuple[List[CandidateEval], List[Dict[str, Any]], List[BindingSiteResult], List[Dict[str, str]]]:
     """
     Returns:
@@ -1076,10 +1081,16 @@ def run_ga(
         cached_pairs: List[Tuple[CandidateEval, Dict[str, str]]] = []
         new_inds: List[Tuple[int, Dict[str, str]]] = []
         for idx, ind in enumerate(population):
-            key = (
-                normalize_rna(ind.get("five_prime_flank", default_flank)),
-                normalize_rna(ind.get("rbs", "")),
-                normalize_rna(ind.get("spacer", "")),
+            cid = ind.get("id", f"g{gen}_i{idx}")
+            ev, sites = evaluate_candidate(
+                ind,
+                orth_anti_sd=orth_anti_sd,
+                wt_anti_sd=wt_anti_sd,
+                default_flank=default_flank,
+                default_cds_start=default_cds_start,
+                wt_penalty_constant=wt_penalty_constant,
+                candidate_id=cid,
+                r0=r0,
             )
             if key in all_evals_by_key:
                 cached_pairs.append((all_evals_by_key[key], ind))
