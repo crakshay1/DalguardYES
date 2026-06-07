@@ -39,6 +39,9 @@ Notes:
     - Delta-G duplex and standby calculations require ViennaRNA.
     - No pseudo-folding or approximate duplex fallback is used in this version.
     - The code uses RNA internally. DNA T is normalized to RNA U.
+
+
+@ritar18 @georgyzaouk @PaulVerot03
 """
 
 from __future__ import annotations

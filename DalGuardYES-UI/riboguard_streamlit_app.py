@@ -14,7 +14,9 @@ import orbs_duplex as orbs
 import candidates as candgen
 import riboguard_ga_engine_clean as ga
 
-
+"""
+@ritar18 @georgyzaouk @PaulVerot03
+"""
 # -----------------------------------------------------------------------------
 # Page setup and styling
 # -----------------------------------------------------------------------------
