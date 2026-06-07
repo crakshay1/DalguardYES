@@ -17,6 +17,8 @@ python3 orbs_duplex.py --sequence AUCGCAAAACAGGAUCGUC --mrna5 AAAAACAAAAA --mrna
 
 python3 orbs_duplex.py --fasta Tv3test.fa --mrna5 AAAAACAAAAA --mrna3 UUUUUUGUUUUUU
 (output: query_20260606_224031_rbs_core.json)
+
+@cuajiniquil (EmmaGH)
 """
 
 from __future__ import annotations
