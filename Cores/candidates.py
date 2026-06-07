@@ -169,7 +169,7 @@ def random_spacer(length: int, max_tries: int = 1000) -> str | None:
 # Per-seed generation
 # ─────────────────────────────────────────────────────────────────────────────
 
-def generate_candidates(seed: dict[str, Any], standbysize: int , n: int, spacer_len_min: int, spacer_len_max: int, max_tries: int) -> list[dict[str, Any]]:
+def generate_candidates(seed: dict[str, Any], n: int, spacer_len_min: int, spacer_len_max: int, max_tries: int) -> list[dict[str, Any]]:
     """
         Generates a list of candidates with the methods created above.
     """
@@ -179,7 +179,7 @@ def generate_candidates(seed: dict[str, Any], standbysize: int , n: int, spacer_
     core = normalise(seed["core"])
     cds_start = normalise(seed["cds_start"])
     mutable = seed.get("mutable_regions", [])
-    standby = random_spacer(standbysize, max_tries)
+    #standby = random_spacer(standbysize, max_tries)
 
     # Validation 
     if core not in rbs:
@@ -223,7 +223,7 @@ def generate_candidates(seed: dict[str, Any], standbysize: int , n: int, spacer_
         candidates.append({
             "name": f"{name}_c{len(candidates) + 1:04d}",
             "five_prime_flank": flank,
-            "stand_by" : _randomise_positions(standby, True),
+            #"stand_by" : _randomise_positions(standby, True),
             "rbs": new_rbs,
             "core": core,
             "spacer": new_spacer,
@@ -249,8 +249,8 @@ def main() -> None:
                         help="Output JSON path.")
     parser.add_argument("--n", type=int, default=100,
                         help="Candidates per seed (default: 100).")
-    parser.add_argument("--standbyN", type=int, default=4,
-                        help="Standby sequence length (default: 4).")
+    #parser.add_argument("--standbyN", type=int, default=4,
+                        #help="Standby sequence length (default: 4).")
     parser.add_argument("--spacer-len", type=int, nargs=2, default=[4, 7],
                         metavar=("MIN", "MAX"),
                         help="Spacer length range (default: 4 7).")
@@ -279,7 +279,7 @@ def main() -> None:
         print(f"\n[INFO] Seed '{seed['name']}' → generating {args.n} candidates …")
         cands = generate_candidates(
             seed          = seed,
-            standbysize   = args.standbyN,
+            #standbysize   = args.standbyN,
             n             = args.n,
             spacer_len_min= sp_min,
             spacer_len_max= sp_max,
