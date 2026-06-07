@@ -28,3 +28,6 @@ venv/
 2ndStruct/LinearFold/src/*.o
 2ndStruct/RiboTv3.fasta
 2ndStruct/LinearFold
+
+# MacOS
+.DS_Store
