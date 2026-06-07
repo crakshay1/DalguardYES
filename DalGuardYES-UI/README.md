@@ -1,6 +1,8 @@
-# RiboGuard AI Streamlit Dashboard
+# Shine DalGuardYES - Streamlit Dashboard :
+**Computational design of RBS architectures for orthogonal anti–Shine-Dalgarno ribosome systems**  
+*IGEM — Université Evry Paris-Saclay*  
 
-This is the simplified all-in-one hackathon app:
+This is the simplified all-in-one hackathon app :  
 
 ```text
 ORBS-duplex seed selection -> candidates.py initial candidates -> GA/TIR optimizer -> Streamlit dashboard
