@@ -21,5 +21,11 @@
 ## Repository Structure
 
 ```text
-
+  DalGuardYES-UI/                         # Source code
+  ├── candidates.py                       # Initial candidates 
+  ├── orbs_duplex.py                      # Core detection 
+  ├── riboguard_ga_engine_clean.py        # Genetic algorithm application
+  ├── riboguard_streamlit.py              # Dashboard
+  └── requirements.txt                    # Requirements
+  _Archives/                              # Old code
 ```
