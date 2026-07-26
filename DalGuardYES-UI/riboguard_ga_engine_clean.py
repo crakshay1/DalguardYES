@@ -43,12 +43,18 @@ import argparse
 import csv
 import json
 import math
+import multiprocessing as _mp
 import os
 import random
 import subprocess
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Any
+
+# Force fork so worker processes inherit already-imported ViennaRNA state
+# instead of re-importing under spawn.
+_FORK_CTX = _mp.get_context("fork")
 
 # -------------------------
 # Constants / defaults
@@ -974,6 +980,20 @@ def generate_guided_seed_candidates(
 # GA main loop
 # -------------------------
 
+def _eval_worker(args: Tuple) -> Tuple[CandidateEval, List[BindingSiteResult]]:
+    """Module-level so ProcessPoolExecutor can pickle it."""
+    candidate, orth_anti_sd, wt_anti_sd, default_flank, default_cds_start, wt_penalty_constant, cid = args
+    return evaluate_candidate(
+        candidate,
+        orth_anti_sd=orth_anti_sd,
+        wt_anti_sd=wt_anti_sd,
+        default_flank=default_flank,
+        default_cds_start=default_cds_start,
+        wt_penalty_constant=wt_penalty_constant,
+        candidate_id=cid,
+    )
+
+
 def run_ga(
     initial_candidates: List[Dict[str, str]],
     orth_anti_sd: str = DEFAULT_ORTH_ASD,
@@ -985,6 +1005,8 @@ def run_ga(
     elite_fraction: float = 0.20,
     wt_penalty_constant: float = DEFAULT_WT_PENALTY_CONSTANT,
     seed: int = 7,
+    parallel: bool = False,
+    max_workers: Optional[int] = None,
 ) -> Tuple[List[CandidateEval], List[Dict[str, Any]], List[BindingSiteResult], List[Dict[str, str]]]:
     """
     Returns:
@@ -1021,27 +1043,43 @@ def run_ga(
     all_evals_by_key: Dict[Tuple[str, str, str], CandidateEval] = {}
     all_binding_sites: List[BindingSiteResult] = []
     history: List[Dict[str, Any]] = []
+    n_workers = max_workers or max(1, (os.cpu_count() or 2) - 1)
 
     for gen in range(generations):
         scored: List[Tuple[CandidateEval, Dict[str, str]]] = []
 
-        for idx, ind in enumerate(population):
-            cid = ind.get("id", f"g{gen}_i{idx}")
-            ev, sites = evaluate_candidate(
-                ind,
-                orth_anti_sd=orth_anti_sd,
-                wt_anti_sd=wt_anti_sd,
-                default_flank=default_flank,
-                default_cds_start=default_cds_start,
-                wt_penalty_constant=wt_penalty_constant,
-                candidate_id=cid,
-            )
-            scored.append((ev, ind))
-            all_binding_sites.extend(sites)
+        if parallel and len(population) > 1:
+            tasks = [
+                (ind, orth_anti_sd, wt_anti_sd, default_flank, default_cds_start,
+                 wt_penalty_constant, ind.get("id", f"g{gen}_i{idx}"))
+                for idx, ind in enumerate(population)
+            ]
+            with ProcessPoolExecutor(max_workers=n_workers, mp_context=_FORK_CTX) as executor:
+                results = list(executor.map(_eval_worker, tasks))
+            for ind, (ev, sites) in zip(population, results):
+                scored.append((ev, ind))
+                all_binding_sites.extend(sites)
+                key = (ev.five_prime_flank, ev.rbs, ev.spacer)
+                if key not in all_evals_by_key or ev.fitness_for_selection > all_evals_by_key[key].fitness_for_selection:
+                    all_evals_by_key[key] = ev
+        else:
+            for idx, ind in enumerate(population):
+                cid = ind.get("id", f"g{gen}_i{idx}")
+                ev, sites = evaluate_candidate(
+                    ind,
+                    orth_anti_sd=orth_anti_sd,
+                    wt_anti_sd=wt_anti_sd,
+                    default_flank=default_flank,
+                    default_cds_start=default_cds_start,
+                    wt_penalty_constant=wt_penalty_constant,
+                    candidate_id=cid,
+                )
+                scored.append((ev, ind))
+                all_binding_sites.extend(sites)
 
-            key = (ev.five_prime_flank, ev.rbs, ev.spacer)
-            if key not in all_evals_by_key or ev.fitness_for_selection > all_evals_by_key[key].fitness_for_selection:
-                all_evals_by_key[key] = ev
+                key = (ev.five_prime_flank, ev.rbs, ev.spacer)
+                if key not in all_evals_by_key or ev.fitness_for_selection > all_evals_by_key[key].fitness_for_selection:
+                    all_evals_by_key[key] = ev
 
         scored.sort(key=lambda x: x[0].fitness_for_selection, reverse=True)
         evals = [x[0] for x in scored]
@@ -1314,6 +1352,8 @@ def main() -> None:
     parser.add_argument("--population", type=int, default=80)
     parser.add_argument("--wt-penalty", type=float, default=DEFAULT_WT_PENALTY_CONSTANT)
     parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument("--parallel", action="store_true", help="Evaluate candidates across multiple CPU cores")
+    parser.add_argument("--workers", type=int, default=None, help="Worker processes when --parallel is set (default: CPU count - 1)")
     args = parser.parse_args()
 
     initial_candidates = load_initial_candidates(args.seeds)
@@ -1330,6 +1370,8 @@ def main() -> None:
         population_size=args.population,
         wt_penalty_constant=args.wt_penalty,
         seed=args.seed,
+        parallel=args.parallel,
+        max_workers=args.workers,
     )
 
     dataset = build_dashboard_dataset(

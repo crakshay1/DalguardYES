@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import random
 from dataclasses import asdict
 from pathlib import Path
@@ -286,6 +287,7 @@ def run_full_pipeline_cached(
     wt_penalty_constant: float,
     rng_seed: int,
     top_n: int,
+    parallel: bool = False,
 ) -> Dict[str, Any]:
     """ORBS-duplex -> candidates.py -> GA optimizer -> dashboard dataset."""
     random.seed(int(rng_seed))
@@ -330,6 +332,7 @@ def run_full_pipeline_cached(
         elite_fraction=float(elite_fraction),
         wt_penalty_constant=float(wt_penalty_constant),
         seed=int(rng_seed),
+        parallel=bool(parallel),
     )
 
     dataset = ga.build_dashboard_dataset(
@@ -573,6 +576,18 @@ with st.sidebar.expander("GA optimizer settings", expanded=True):
         step=5,
     )
 
+    _cpu_count = os.cpu_count() or 1
+    use_parallel = st.checkbox(
+        "Run on multiple CPU cores",
+        value=False,
+        help=(
+            f"Evaluate each generation's candidates across up to {max(1, _cpu_count - 1)} "
+            f"worker processes (this machine has {_cpu_count} CPUs) instead of one at a "
+            "time. Off by default; results are identical either way, this only changes "
+            "how fast the run finishes."
+        ),
+    )
+
 run_clicked = st.sidebar.button(
     "Run Optimization",
     type="primary",
@@ -640,6 +655,7 @@ if run_clicked:
                 wt_penalty_constant=float(wt_penalty_constant),
                 rng_seed=int(rng_seed),
                 top_n=int(top_n),
+                parallel=bool(use_parallel),
             )
 
         st.session_state["dataset"] = dataset
