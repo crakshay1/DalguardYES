@@ -3,11 +3,7 @@
 RiboGuard GA Engine
 ===================
 
-Standalone Python backend for the RiboGuard dashboard.
-
-This file starts AFTER your friend's initial-candidate generator.
-
-Expected input from friend:
+Expected input:
     A list of candidate dictionaries, one dictionary per candidate.
 
 Minimum candidate format:

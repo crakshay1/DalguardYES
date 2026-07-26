@@ -10,22 +10,26 @@
 -------
 
 ## Project Overview
-
+Here is a [guide](https://github.com/crakshay1/DalguardYES/blob/main/DalGuardYES-UI/README.md) to run our pipeline.
 ### Preview
 <img width="1920" height="1047" alt="image" src="https://github.com/user-attachments/assets/f2ed2f93-02c0-4419-b051-5477a9083be9" />
 <img width="1920" height="1047" alt="image" src="https://github.com/user-attachments/assets/6d476235-1508-496e-8498-1910194801e2" />
 
 ### Workflow
-<img width="499" height="743" alt="image" src="https://github.com/user-attachments/assets/afeb3068-dfb6-4162-966b-7fa35461ab0d" />
+<img width="818" height="524" alt="serenouche" src="https://github.com/user-attachments/assets/31f86876-9f3d-4d8f-98a5-22bb6c9bf14a" /><?xml version="1.0" encoding="UTF-8"?>
 
 ## Repository Structure
 
 ```text
-  DalGuardYES-UI/                         # Source code
-  ├── candidates.py                       # Initial candidates 
-  ├── orbs_duplex.py                      # Core detection 
-  ├── riboguard_ga_engine_clean.py        # Genetic algorithm application
-  ├── riboguard_streamlit.py              # Dashboard
-  └── requirements.txt                    # Requirements
-  _Archives/                              # Old code
+DalGuardYES/
+│
+└── DalGuardYES-UI/                          # Source code
+│    ├── candidates.py                       # Initial candidates 
+│    ├── orbs_duplex.py                      # Core detection 
+│    ├── riboguard_ga_engine_clean.py        # Genetic algorithm application
+│    ├── riboguard_streamlit.py              # Dashboard
+│    └── requirements.txt                    # Dependencies
+├── _Archives/                               # Old code
+├── demo1.mp4                                # Demonstration video
+└── demo2.mp4                                # Demonstration video
 ```
