@@ -593,6 +593,10 @@ st.markdown(
     "<div class='hero-subtitle'>Orthogonal RBS Optimization and Biosafety Analysis</div>",
     unsafe_allow_html=True,
 )
+st.markdown(
+    "<div class='hero-subtitle'>GitHub repo : <a href='https://github.com/crakshay1/DalguardYES' target='_blank'>crakshay1/DalguardYES</a></div>",
+    unsafe_allow_html=True,
+)
 
 if not run_clicked and "dataset" not in st.session_state:
     st.info(
