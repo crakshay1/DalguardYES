@@ -1,53 +1,57 @@
-# Shine DalGuardYES - Streamlit Dashboard :
-**Computational design of RBS architectures for orthogonal anti–Shine-Dalgarno ribosome systems**  
-*IGEM — Université Evry Paris-Saclay*  
+# Shine DalGuardYES — unified candidate schema
 
-This is the simplified all-in-one hackathon app :  
+Pipeline:
 
 ```text
-ORBS-duplex seed selection -> candidates.py initial candidates -> GA/TIR optimizer -> Streamlit dashboard
+ORBS-duplex seed selection -> candidates.py -> GA/TIR optimizer -> Streamlit dashboard
+```
+
+## Canonical candidate
+
+Every stage now uses the same explicit sequence fields:
+
+```json
+{
+  "name": "seed_002",
+  "five_prime_utr": "UUUAAA",
+  "standby": "AUAA",
+  "rbs_left": "AAGG",
+  "rbs_core": "UACAAG",
+  "rbs_right": "UCU",
+  "spacer": "AAUAAA",
+  "cds_start": "AUGGCUACUAAAGAAAACGCU",
+  "mutable_regions": ["standby", "rbs_left", "rbs_right", "spacer"],
+  "protected_regions": ["five_prime_utr", "rbs_core", "cds_start"]
+}
+```
+
+### Mutation rule
+
+Mutable: `standby`, `rbs_left`, `rbs_right`, `spacer`.
+
+Protected: `five_prime_utr`, `rbs_core`, `cds_start`.
+
+There is no `standby_start` pointer anymore. The standby sequence is its own attribute and is kept in the sequence during folding, ΔG/TIR evaluation, ranking, and output.
+
+The assembled sequence is:
+
+```text
+five_prime_utr + standby + rbs_left + rbs_core + rbs_right + spacer + cds_start
 ```
 
 ## Files
 
-- `riboguard_streamlit_app.py` — the Streamlit dashboard
-- `orbs_duplex.py` — ORBS-duplex seed step
-- `candidates.py` — initial candidate generator
-- `riboguard_ga_engine_clean.py` — GA / ΔG / TIR optimizer
+- `orbs_duplex.py` — creates the seed using the canonical schema
+- `candidates.py` — creates initial candidates using the same mutation rules as the GA
+- `riboguard_ga_engine_clean.py` — preserves the schema through mutation/crossover and exports standby explicitly
+- `riboguard_streamlit_app.py` — separate fixed 5′ UTR and mutable standby inputs
 - `requirements.txt` — dependencies
 
 ## Run
 
 ```bash
-cd riboguard_streamlit_final
 pip install -r requirements.txt
 streamlit run riboguard_streamlit_app.py
 ```
 
-The clean version requires ViennaRNA. There is no fake folding fallback and no approximate duplex fallback.
-
-## Input flow
-
-The sidebar collects:
-
-- ORBS search sequence / orthogonal tail
-- Orthogonal anti-SD
-- WT anti-SD
-- 5' flank
-- CDS start
-- ORBS-duplex settings
-- candidate-generation settings
-- GA settings
-
-When you click **Run Optimization**, the app runs the full pipeline and displays:
-
-- Best RBS / spacer / TIR / T-score cards
-- ORBS-duplex seed
-- GA evolution chart
-- Energy breakdown
-- Candidate ranking
-- Binding-site dropdown tables
-- Best-candidate binding-site table
-- Local sequence and dot-bracket inspector
-- Orthogonality landscape
-- JSON/CSV downloads
+ViennaRNA is required for the full thermodynamic pipeline.

@@ -64,7 +64,9 @@ BASES = ["A", "U", "G", "C"]
 
 DEFAULT_ORTH_ASD = "ACTTGTATA"
 DEFAULT_WT_ASD = "ACCTCCTTA"
-DEFAULT_FLANK = "AAUAAU"
+DEFAULT_FLANK = "AAUAAU"  # legacy alias for older callers
+DEFAULT_FIVE_PRIME_UTR = DEFAULT_FLANK
+DEFAULT_STANDBY = ""
 DEFAULT_CDS_START = "AUGGCUACUAAAGAAAACGCUACUGCU"
 
 # Physical constants requested by team
@@ -129,10 +131,18 @@ class BindingSiteResult:
 @dataclass
 class CandidateEval:
     candidate_id: str
-    five_prime_flank: str
+
+    # Canonical sequence schema
+    five_prime_utr: str
+    standby: str
+    rbs_left: str
+    rbs_core: str
+    rbs_right: str
     rbs: str
     spacer: str
     cds_start: str
+
+    # Assembled sequences / folding
     full_seq: str
     utr_seq: str
     structure: str
@@ -146,17 +156,36 @@ class CandidateEval:
     aug_access: float
     long_range_flag: bool
     long_range_pairs: str
+
+    # Candidate-level thermodynamics
     dG_duplex_orth: float
     dG_duplex_wt: float
     dG_start: float
-    dG_standby: float
-    best_dG_spacing: float
-    best_dG_mrna_unfolding: float
-    dG_total: float
+    dG_standby_orth: float
+    dG_standby_wt: float
+
+    # Best orthogonal binding-site terms
+    best_dG_spacing_orth: float
+    best_dG_mrna_unfolding_orth: float
+    dG_total_orth: float
+
+    # Best WT binding-site terms
+    best_dG_spacing_wt: float
+    best_dG_mrna_unfolding_wt: float
+    dG_total_wt: float
+
+    # Expression / ranking
     orth_tir: float
     wt_tir: float
     t_score: float
     fitness_for_selection: float
+
+    # Legacy/dashboard aliases retained internally for compatibility.
+    # They are intentionally omitted from the clean workbook export.
+    dG_standby: float
+    best_dG_spacing: float
+    best_dG_mrna_unfolding: float
+    dG_total: float
     orthScore: float
     wtLeakage: float
     fitness: float
@@ -544,16 +573,101 @@ def normalized_affinity_from_dG(dg: float, scale: float = 12.0) -> float:
 # Candidate construction and binding-site scanning
 # -------------------------
 
-def build_full_sequence(candidate: Dict[str, str], default_flank: str, default_cds_start: str) -> Tuple[str, str, str, str, int, int, int, int]:
-    flank = normalize_rna(candidate.get("five_prime_flank", default_flank))
-    rbs = normalize_rna(candidate.get("rbs", ""))
-    spacer = normalize_rna(candidate.get("spacer", ""))
-    cds = normalize_rna(candidate.get("cds_start", default_cds_start))
-    if not cds.startswith("AUG"):
-        cds = "AUG" + cds
+def canonicalize_candidate(
+    candidate: Dict[str, Any],
+    default_five_prime_utr: str = DEFAULT_FIVE_PRIME_UTR,
+    default_standby: str = DEFAULT_STANDBY,
+    default_cds_start: str = DEFAULT_CDS_START,
+) -> Dict[str, Any]:
+    """Return a candidate in the canonical DalGuardYES sequence schema.
 
-    full_seq = flank + rbs + spacer + cds
-    rbs_start = len(flank)
+    Canonical sequence order:
+        five_prime_utr + standby + rbs_left + rbs_core + rbs_right + spacer + cds_start
+
+    Older ``five_prime_flank`` / ``core`` inputs are accepted only as a
+    compatibility bridge.  New GA populations always retain the explicit
+    canonical fields.
+    """
+    c = dict(candidate or {})
+
+    # New schema first; fall back to the legacy flank only when necessary.
+    if c.get("five_prime_utr") is not None:
+        five_prime_utr = normalize_rna(c.get("five_prime_utr", ""))
+    elif c.get("five_prime_flank") is not None:
+        five_prime_utr = normalize_rna(c.get("five_prime_flank", ""))
+    else:
+        five_prime_utr = normalize_rna(default_five_prime_utr)
+
+    standby = normalize_rna(c.get("standby", default_standby))
+    spacer = normalize_rna(c.get("spacer", ""))
+    cds_start = normalize_rna(c.get("cds_start", default_cds_start))
+    if not cds_start.startswith("AUG"):
+        cds_start = "AUG" + cds_start
+
+    rbs = normalize_rna(c.get("rbs", ""))
+    rbs_core = normalize_rna(c.get("rbs_core", c.get("core", "")))
+    rbs_left = normalize_rna(c.get("rbs_left", ""))
+    rbs_right = normalize_rna(c.get("rbs_right", ""))
+
+    # Explicit left/right fields mean the canonical components are the source
+    # of truth.  A legacy input may provide only ``core`` plus a full ``rbs``;
+    # in that case we must split the full RBS rather than collapse it to core.
+    has_explicit_sides = ("rbs_left" in c) or ("rbs_right" in c)
+    if has_explicit_sides:
+        component_rbs = rbs_left + rbs_core + rbs_right
+        if component_rbs:
+            rbs = component_rbs
+    elif rbs and rbs_core and rbs_core in rbs:
+        idx = rbs.find(rbs_core)
+        rbs_left = rbs[:idx]
+        rbs_right = rbs[idx + len(rbs_core):]
+    elif not rbs and rbs_core:
+        rbs = rbs_core
+    # Last-resort compatibility: protect the full supplied RBS.
+    elif rbs and not rbs_core:
+        rbs_core = rbs
+
+    out: Dict[str, Any] = dict(c)
+    out.update({
+        "five_prime_utr": five_prime_utr,
+        "standby": standby,
+        "rbs_left": rbs_left,
+        "rbs_core": rbs_core,
+        "rbs_right": rbs_right,
+        "rbs": rbs,
+        "spacer": spacer,
+        "cds_start": cds_start,
+        "mutable_regions": c.get(
+            "mutable_regions",
+            ["standby", "rbs_left", "rbs_right", "spacer"],
+        ),
+        "protected_regions": c.get(
+            "protected_regions",
+            ["five_prime_utr", "rbs_core", "cds_start"],
+        ),
+    })
+    return out
+
+
+def build_full_sequence(
+    candidate: Dict[str, Any],
+    default_five_prime_utr: str = DEFAULT_FIVE_PRIME_UTR,
+    default_standby: str = DEFAULT_STANDBY,
+    default_cds_start: str = DEFAULT_CDS_START,
+) -> Tuple[str, str, str, str, int, int, int, int]:
+    c = canonicalize_candidate(
+        candidate,
+        default_five_prime_utr=default_five_prime_utr,
+        default_standby=default_standby,
+        default_cds_start=default_cds_start,
+    )
+    prefix = c["five_prime_utr"] + c["standby"]
+    rbs = c["rbs"]
+    spacer = c["spacer"]
+    cds = c["cds_start"]
+
+    full_seq = prefix + rbs + spacer + cds
+    rbs_start = len(prefix)
     rbs_end = rbs_start + len(rbs)
     aug_start = rbs_end + len(spacer)
     aug_end = aug_start + 3
@@ -746,34 +860,34 @@ def score_sites_for_asd(
 
 
 def evaluate_candidate(
-    candidate: Dict[str, str],
+    candidate: Dict[str, Any],
     orth_anti_sd: str,
     wt_anti_sd: str,
-    default_flank: str = DEFAULT_FLANK,
+    default_five_prime_utr: str = DEFAULT_FIVE_PRIME_UTR,
+    default_standby: str = DEFAULT_STANDBY,
     default_cds_start: str = DEFAULT_CDS_START,
     wt_penalty_constant: float = DEFAULT_WT_PENALTY_CONSTANT,
     candidate_id: Optional[str] = None,
+    default_flank: Optional[str] = None,
 ) -> Tuple[CandidateEval, List[BindingSiteResult]]:
-    """
-    Evaluate one candidate using:
-      1. long-range RBS filter
-      2. candidate-level dG duplex
-      3. binding-site-specific dG spacing
-      4. binding-site-specific dG mRNA unfolding
-      5. placeholder dG start / dG standby
-      6. TIR and T-score objective
+    """Evaluate one canonical candidate without changing the thermodynamic model."""
+    if default_flank is not None:
+        default_five_prime_utr = default_flank
 
-    Both orthogonal_TIR and WT_TIR are computed with the same site-level logic.
-    """
     cid = str(candidate_id or candidate.get("id", f"cand_{random.randrange(10**9)}"))
+    c = canonicalize_candidate(
+        candidate,
+        default_five_prime_utr=default_five_prime_utr,
+        default_standby=default_standby,
+        default_cds_start=default_cds_start,
+    )
 
     full_seq, utr_seq, rbs, spacer, rbs_start, rbs_end, aug_start, aug_end = build_full_sequence(
-        candidate, default_flank, default_cds_start
+        c,
+        default_five_prime_utr=default_five_prime_utr,
+        default_standby=default_standby,
+        default_cds_start=default_cds_start,
     )
-    flank = normalize_rna(candidate.get("five_prime_flank", default_flank))
-    cds_start = normalize_rna(candidate.get("cds_start", default_cds_start))
-    if not cds_start.startswith("AUG"):
-        cds_start = "AUG" + cds_start
 
     structure, mfe, backend = fold_sequence(full_seq)
     rbs_access = accessibility_score(structure, rbs_start, rbs_end)
@@ -785,14 +899,14 @@ def evaluate_candidate(
 
     dG_duplex_orth, duplex_backend_orth = delta_g_duplex_whole_utr(utr_seq, orth_anti_sd)
     dG_duplex_wt, _duplex_backend_wt = delta_g_duplex_whole_utr(utr_seq, wt_anti_sd)
-
     dG_start = dG_start_codon(full_seq[aug_start:aug_end])
-    # Candidate-level standby terms. Standby depends on the anti-SD, so orthogonal and WT get separate values.
+
+    # Keep the existing standby-energy model unchanged; retain both orthogonal
+    # and WT values instead of discarding the WT value.
     dG_standby_orth = dG_standby(utr_seq, orth_anti_sd)
     dG_standby_wt = dG_standby(utr_seq, wt_anti_sd)
 
-    # Orthogonal and WT TIR are calculated with the same binding-site logic.
-    orth_tir, dG_total_orth, best_dG_spacing, best_dG_unfold, orth_sites = score_sites_for_asd(
+    orth_tir, dG_total_orth, orth_spacing, orth_unfold, orth_sites = score_sites_for_asd(
         candidate_id=cid,
         anti_sd_type="orthogonal",
         full_seq=full_seq,
@@ -805,7 +919,7 @@ def evaluate_candidate(
         collect_sites=True,
     )
 
-    wt_tir, dG_total_wt, _wt_spacing, _wt_unfold, wt_sites = score_sites_for_asd(
+    wt_tir, dG_total_wt, wt_spacing, wt_unfold, wt_sites = score_sites_for_asd(
         candidate_id=cid,
         anti_sd_type="wt",
         full_seq=full_seq,
@@ -819,26 +933,30 @@ def evaluate_candidate(
     )
 
     site_results = orth_sites + wt_sites
-    
     t_score = safe_log10(orth_tir) - wt_penalty_constant * safe_log10(wt_tir)
     fitness_for_selection = signed_log10_score(t_score)
 
-    # Long-range RBS interactions are a hard filter for ranking.
-    # No categorical status labels are produced; candidates are ranked only by scores.
+    # Existing hard filter retained exactly for selection/ranking.
     if long_range_flag or not orth_sites:
         fitness_for_selection = -1e9
         t_score = -1e9
 
-    # Dashboard-friendly normalized-ish scores.
     orthScore = normalized_affinity_from_dG(dG_duplex_orth)
     wtLeakage = normalized_affinity_from_dG(dG_duplex_wt)
 
+    def _round_or_nan(x: float) -> float:
+        return round(float(x), 4) if not math.isnan(float(x)) else float("nan")
+
     eval_obj = CandidateEval(
         candidate_id=cid,
-        five_prime_flank=flank,
+        five_prime_utr=c["five_prime_utr"],
+        standby=c["standby"],
+        rbs_left=c["rbs_left"],
+        rbs_core=c["rbs_core"],
+        rbs_right=c["rbs_right"],
         rbs=rbs,
         spacer=spacer,
-        cds_start=cds_start,
+        cds_start=c["cds_start"],
         full_seq=full_seq,
         utr_seq=utr_seq,
         structure=structure,
@@ -855,19 +973,26 @@ def evaluate_candidate(
         dG_duplex_orth=round(float(dG_duplex_orth), 4),
         dG_duplex_wt=round(float(dG_duplex_wt), 4),
         dG_start=round(float(dG_start), 4),
-        dG_standby=round(float(dG_standby_orth), 4),
-        best_dG_spacing=round(float(best_dG_spacing), 4) if not math.isnan(best_dG_spacing) else float("nan"),
-        best_dG_mrna_unfolding=round(float(best_dG_unfold), 4) if not math.isnan(best_dG_unfold) else float("nan"),
-        dG_total=round(float(dG_total_orth), 4),
+        dG_standby_orth=round(float(dG_standby_orth), 4),
+        dG_standby_wt=round(float(dG_standby_wt), 4),
+        best_dG_spacing_orth=_round_or_nan(orth_spacing),
+        best_dG_mrna_unfolding_orth=_round_or_nan(orth_unfold),
+        dG_total_orth=round(float(dG_total_orth), 4),
+        best_dG_spacing_wt=_round_or_nan(wt_spacing),
+        best_dG_mrna_unfolding_wt=_round_or_nan(wt_unfold),
+        dG_total_wt=round(float(dG_total_wt), 4),
         orth_tir=float(orth_tir),
         wt_tir=float(wt_tir),
         t_score=float(t_score),
         fitness_for_selection=round(float(fitness_for_selection), 6),
+        dG_standby=round(float(dG_standby_orth), 4),
+        best_dG_spacing=_round_or_nan(orth_spacing),
+        best_dG_mrna_unfolding=_round_or_nan(orth_unfold),
+        dG_total=round(float(dG_total_orth), 4),
         orthScore=round(float(orthScore), 4),
         wtLeakage=round(float(wtLeakage), 4),
-        fitness=0.0,  # filled after normalization across final output
+        fitness=0.0,
     )
-
     return eval_obj, site_results
 
 
@@ -875,102 +1000,116 @@ def evaluate_candidate(
 # GA operators
 # -------------------------
 
-def mutate_candidate(candidate: Dict[str, str], mutate_flank: bool = True) -> Dict[str, str]:
-    """
-    Mutates only 5' flank/RBS/spacer.
-    Does not mutate AUG/CDS.
-    """
-    new = dict(candidate)
-    flank = list(normalize_rna(new.get("five_prime_flank", DEFAULT_FLANK)))
-    rbs = list(normalize_rna(new.get("rbs", "")))
-    spacer = list(normalize_rna(new.get("spacer", "")))
+def _mutate_one_base(seq: str) -> str:
+    if not seq:
+        return seq
+    chars = list(seq)
+    i = random.randrange(len(chars))
+    chars[i] = random.choice([b for b in BASES if b != chars[i]])
+    return "".join(chars)
 
-    ops = ["rbs_sub", "rbs_sub", "spacer_sub", "spacer_sub", "spacer_insert", "spacer_delete", "rbs_insert", "rbs_delete"]
-    if mutate_flank:
-        ops.extend(["flank_sub", "flank_sub"])
+
+def mutate_candidate(candidate: Dict[str, Any], mutate_flank: bool = True) -> Dict[str, Any]:
+    """Mutate only standby, non-core RBS segments, and spacer.
+
+    ``mutate_flank`` is retained as a legacy argument but now controls standby
+    mutation only.  The fixed 5′ UTR, protected RBS core, and CDS are never
+    mutated.
+    """
+    new = canonicalize_candidate(candidate)
+    mutable = set(new.get("mutable_regions") or ["standby", "rbs_left", "rbs_right", "spacer"])
+
+    ops: List[str] = []
+    if mutate_flank and "standby" in mutable and new["standby"]:
+        ops.extend(["standby_sub", "standby_sub"])
+    if ("rbs_left" in mutable or "rbs" in mutable) and new["rbs_left"]:
+        ops.extend(["rbs_left_sub", "rbs_left_sub"])
+    if ("rbs_right" in mutable or "rbs" in mutable) and new["rbs_right"]:
+        ops.extend(["rbs_right_sub", "rbs_right_sub"])
+    if "spacer" in mutable:
+        ops.extend(["spacer_sub", "spacer_sub", "spacer_insert", "spacer_delete"])
+
+    if not ops:
+        return new
+
     op = random.choice(ops)
+    spacer = new["spacer"]
+    spacer_min = int(new.get("spacer_len_min", 3) or 3)
+    spacer_max = int(new.get("spacer_len_max", 14) or 14)
 
-    if op == "rbs_sub" and rbs:
-        i = random.randrange(len(rbs))
-        rbs[i] = random.choice([b for b in BASES if b != rbs[i]])
+    if op == "standby_sub":
+        new["standby"] = _mutate_one_base(new["standby"])
+    elif op == "rbs_left_sub":
+        new["rbs_left"] = _mutate_one_base(new["rbs_left"])
+    elif op == "rbs_right_sub":
+        new["rbs_right"] = _mutate_one_base(new["rbs_right"])
     elif op == "spacer_sub" and spacer:
-        i = random.randrange(len(spacer))
-        spacer[i] = random.choice(["A", "U", "A", "U", "G", "C"])
-    elif op == "spacer_insert" and len(spacer) < 14:
+        new["spacer"] = _mutate_one_base(spacer)
+    elif op == "spacer_insert" and len(spacer) < spacer_max:
         i = random.randrange(len(spacer) + 1)
-        spacer.insert(i, random.choice(["A", "U", "A", "U", "G", "C"]))
-    elif op == "spacer_delete" and len(spacer) > 3:
+        new["spacer"] = spacer[:i] + random.choice(BASES) + spacer[i:]
+    elif op == "spacer_delete" and len(spacer) > spacer_min:
         i = random.randrange(len(spacer))
-        spacer.pop(i)
-    elif op == "rbs_insert" and len(rbs) < 12:
-        i = random.randrange(len(rbs) + 1)
-        rbs.insert(i, random.choice(BASES))
-    elif op == "rbs_delete" and len(rbs) > 4:
-        i = random.randrange(len(rbs))
-        rbs.pop(i)
-    elif op == "flank_sub" and flank:
-        i = random.randrange(len(flank))
-        flank[i] = random.choice(["A", "U", "A", "U", "G", "C"])
+        new["spacer"] = spacer[:i] + spacer[i + 1:]
 
-    new["five_prime_flank"] = "".join(flank)
-    new["rbs"] = "".join(rbs)
-    new["spacer"] = "".join(spacer)
+    new["rbs"] = new["rbs_left"] + new["rbs_core"] + new["rbs_right"]
     return new
 
 
-def crossover(a: Dict[str, str], b: Dict[str, str]) -> Dict[str, str]:
-    """
-    Modular crossover between two candidates.
-    """
-    child = {}
-    child["five_prime_flank"] = random.choice([a.get("five_prime_flank", DEFAULT_FLANK), b.get("five_prime_flank", DEFAULT_FLANK)])
-    child["rbs"] = random.choice([a.get("rbs", ""), b.get("rbs", "")])
-    child["spacer"] = random.choice([a.get("spacer", ""), b.get("spacer", "")])
-    # CDS usually global/fixed; keep parent A if present.
-    if "cds_start" in a or "cds_start" in b:
-        child["cds_start"] = a.get("cds_start", b.get("cds_start", DEFAULT_CDS_START))
+def crossover(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
+    """Modular crossover that preserves all protected sequence fields."""
+    ca = canonicalize_candidate(a)
+    cb = canonicalize_candidate(b)
+    child: Dict[str, Any] = {
+        "five_prime_utr": ca["five_prime_utr"],
+        "standby": random.choice([ca["standby"], cb["standby"]]),
+        "rbs_left": random.choice([ca["rbs_left"], cb["rbs_left"]]),
+        "rbs_core": ca["rbs_core"],
+        "rbs_right": random.choice([ca["rbs_right"], cb["rbs_right"]]),
+        "spacer": random.choice([ca["spacer"], cb["spacer"]]),
+        "cds_start": ca["cds_start"],
+        "mutable_regions": ca.get("mutable_regions", ["standby", "rbs_left", "rbs_right", "spacer"]),
+        "protected_regions": ca.get("protected_regions", ["five_prime_utr", "rbs_core", "cds_start"]),
+        "spacer_len_min": ca.get("spacer_len_min", cb.get("spacer_len_min", 3)),
+        "spacer_len_max": ca.get("spacer_len_max", cb.get("spacer_len_max", 14)),
+        "source": "ga_crossover",
+    }
+    child["rbs"] = child["rbs_left"] + child["rbs_core"] + child["rbs_right"]
     return child
 
 
 def generate_guided_seed_candidates(
     orth_anti_sd: str,
     n: int,
-    default_flank: str = DEFAULT_FLANK,
+    default_five_prime_utr: str = DEFAULT_FIVE_PRIME_UTR,
+    default_standby: str = DEFAULT_STANDBY,
     default_cds_start: str = DEFAULT_CDS_START,
-) -> List[Dict[str, str]]:
-    """
-    Built-in guided seed generator in case friend's seeds are too few.
-    """
-    core = reverse_complement(orth_anti_sd)
-    seeds = set()
-    if core:
-        seeds.add(core)
-
-    # windows
-    for length in range(5, min(10, len(core)) + 1):
-        for start in range(0, len(core) - length + 1):
-            seeds.add(core[start:start+length])
-
-    seeds = {s for s in seeds if 4 <= len(s) <= 12}
-    seed_list = list(seeds) if seeds else ["UACAAG"]
+    default_flank: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Fallback guided seeds when the supplied initial population is too small."""
+    if default_flank is not None:
+        default_five_prime_utr = default_flank
+    core = reverse_complement(orth_anti_sd) or "UACAAG"
 
     def random_spacer(length: int) -> str:
-        return "".join(random.choice(["A", "U", "A", "U", "G", "C"]) for _ in range(length))
+        return "".join(random.choice(BASES) for _ in range(length))
 
-    out = []
+    out: List[Dict[str, Any]] = []
     while len(out) < n:
-        rbs = list(random.choice(seed_list))
-        # mutate lightly
-        for _ in range(random.choice([0, 1, 1, 2])):
-            if rbs:
-                i = random.randrange(len(rbs))
-                rbs[i] = random.choice([b for b in BASES if b != rbs[i]])
         spacer = random_spacer(random.randint(4, 12))
         out.append({
-            "five_prime_flank": normalize_rna(default_flank),
-            "rbs": "".join(rbs),
+            "five_prime_utr": normalize_rna(default_five_prime_utr),
+            "standby": normalize_rna(default_standby),
+            "rbs_left": "",
+            "rbs_core": core,
+            "rbs_right": "",
+            "rbs": core,
             "spacer": spacer,
             "cds_start": normalize_rna(default_cds_start),
+            "mutable_regions": ["standby", "rbs_left", "rbs_right", "spacer"],
+            "protected_regions": ["five_prime_utr", "rbs_core", "cds_start"],
+            "spacer_len_min": 4,
+            "spacer_len_max": 12,
             "source": "guided_seed",
         })
     return out
@@ -982,12 +1121,16 @@ def generate_guided_seed_candidates(
 
 def _eval_worker(args: Tuple) -> Tuple[CandidateEval, List[BindingSiteResult]]:
     """Module-level so ProcessPoolExecutor can pickle it."""
-    candidate, orth_anti_sd, wt_anti_sd, default_flank, default_cds_start, wt_penalty_constant, cid = args
+    (
+        candidate, orth_anti_sd, wt_anti_sd, default_five_prime_utr,
+        default_standby, default_cds_start, wt_penalty_constant, cid,
+    ) = args
     return evaluate_candidate(
         candidate,
         orth_anti_sd=orth_anti_sd,
         wt_anti_sd=wt_anti_sd,
-        default_flank=default_flank,
+        default_five_prime_utr=default_five_prime_utr,
+        default_standby=default_standby,
         default_cds_start=default_cds_start,
         wt_penalty_constant=wt_penalty_constant,
         candidate_id=cid,
@@ -995,10 +1138,11 @@ def _eval_worker(args: Tuple) -> Tuple[CandidateEval, List[BindingSiteResult]]:
 
 
 def run_ga(
-    initial_candidates: List[Dict[str, str]],
+    initial_candidates: List[Dict[str, Any]],
     orth_anti_sd: str = DEFAULT_ORTH_ASD,
     wt_anti_sd: str = DEFAULT_WT_ASD,
-    default_flank: str = DEFAULT_FLANK,
+    default_five_prime_utr: str = DEFAULT_FIVE_PRIME_UTR,
+    default_standby: str = DEFAULT_STANDBY,
     default_cds_start: str = DEFAULT_CDS_START,
     generations: int = 30,
     population_size: int = 80,
@@ -1007,59 +1151,64 @@ def run_ga(
     seed: int = 7,
     parallel: bool = False,
     max_workers: Optional[int] = None,
-) -> Tuple[List[CandidateEval], List[Dict[str, Any]], List[BindingSiteResult], List[Dict[str, str]]]:
-    """
-    Returns:
-        final_ranked_candidates,
-        fitness_history,
-        binding_site_results,
-        final_population
-    """
+    default_flank: Optional[str] = None,
+) -> Tuple[List[CandidateEval], List[Dict[str, Any]], List[BindingSiteResult], List[Dict[str, Any]]]:
+    """Run the GA and retain scientifically meaningful per-generation statistics."""
+    if default_flank is not None:
+        default_five_prime_utr = default_flank
+
     random.seed(seed)
     orth_anti_sd = normalize_rna(orth_anti_sd)
     wt_anti_sd = normalize_rna(wt_anti_sd)
 
-    # Normalize/fill initial population.
-    population: List[Dict[str, str]] = []
+    population: List[Dict[str, Any]] = []
     for i, c in enumerate(initial_candidates or []):
-        population.append({
-            "id": str(c.get("id", f"seed_{i+1:04d}")),
-            "five_prime_flank": normalize_rna(c.get("five_prime_flank", default_flank)),
-            "rbs": normalize_rna(c.get("rbs", "")),
-            "spacer": normalize_rna(c.get("spacer", "")),
-            "cds_start": normalize_rna(c.get("cds_start", default_cds_start)),
-            "source": c.get("source", "friend_seed"),
-        })
+        cc = canonicalize_candidate(
+            c,
+            default_five_prime_utr=default_five_prime_utr,
+            default_standby=default_standby,
+            default_cds_start=default_cds_start,
+        )
+        cc["id"] = str(c.get("id", f"seed_{i+1:04d}"))
+        cc["source"] = c.get("source", "initial_seed")
+        population.append(cc)
 
     if len(population) < population_size:
-        needed = population_size - len(population)
         population.extend(generate_guided_seed_candidates(
-            orth_anti_sd, needed, default_flank=default_flank, default_cds_start=default_cds_start
+            orth_anti_sd,
+            population_size - len(population),
+            default_five_prime_utr=default_five_prime_utr,
+            default_standby=default_standby,
+            default_cds_start=default_cds_start,
         ))
 
     random.shuffle(population)
     population = population[:population_size]
 
-    all_evals_by_key: Dict[Tuple[str, str, str], CandidateEval] = {}
+    all_evals_by_key: Dict[Tuple[str, str, str, str], CandidateEval] = {}
     all_binding_sites: List[BindingSiteResult] = []
     history: List[Dict[str, Any]] = []
     n_workers = max_workers or max(1, (os.cpu_count() or 2) - 1)
 
     for gen in range(generations):
-        scored: List[Tuple[CandidateEval, Dict[str, str]]] = []
+        scored: List[Tuple[CandidateEval, Dict[str, Any]]] = []
 
         if parallel and len(population) > 1:
             tasks = [
-                (ind, orth_anti_sd, wt_anti_sd, default_flank, default_cds_start,
-                 wt_penalty_constant, ind.get("id", f"g{gen}_i{idx}"))
+                (
+                    ind, orth_anti_sd, wt_anti_sd, default_five_prime_utr,
+                    default_standby, default_cds_start, wt_penalty_constant,
+                    ind.get("id", f"g{gen}_i{idx}"),
+                )
                 for idx, ind in enumerate(population)
             ]
             with ProcessPoolExecutor(max_workers=n_workers, mp_context=_FORK_CTX) as executor:
                 results = list(executor.map(_eval_worker, tasks))
-            for ind, (ev, sites) in zip(population, results):
+            pairs = zip(population, results)
+            for ind, (ev, sites) in pairs:
                 scored.append((ev, ind))
                 all_binding_sites.extend(sites)
-                key = (ev.five_prime_flank, ev.rbs, ev.spacer)
+                key = (ev.five_prime_utr, ev.standby, ev.rbs, ev.spacer)
                 if key not in all_evals_by_key or ev.fitness_for_selection > all_evals_by_key[key].fitness_for_selection:
                     all_evals_by_key[key] = ev
         else:
@@ -1069,41 +1218,69 @@ def run_ga(
                     ind,
                     orth_anti_sd=orth_anti_sd,
                     wt_anti_sd=wt_anti_sd,
-                    default_flank=default_flank,
+                    default_five_prime_utr=default_five_prime_utr,
+                    default_standby=default_standby,
                     default_cds_start=default_cds_start,
                     wt_penalty_constant=wt_penalty_constant,
                     candidate_id=cid,
                 )
                 scored.append((ev, ind))
                 all_binding_sites.extend(sites)
-
-                key = (ev.five_prime_flank, ev.rbs, ev.spacer)
+                key = (ev.five_prime_utr, ev.standby, ev.rbs, ev.spacer)
                 if key not in all_evals_by_key or ev.fitness_for_selection > all_evals_by_key[key].fitness_for_selection:
                     all_evals_by_key[key] = ev
 
         scored.sort(key=lambda x: x[0].fitness_for_selection, reverse=True)
         evals = [x[0] for x in scored]
         best = evals[0]
-        avg_score = sum(e.fitness_for_selection for e in evals) / max(1, len(evals))
-        avg_tir = sum(e.orth_tir for e in evals) / max(1, len(evals))
+        valid = [
+            e for e in evals
+            if e.fitness_for_selection > -1e8
+            and not math.isnan(e.fitness_for_selection)
+            and not math.isinf(e.fitness_for_selection)
+        ]
+
+        if valid:
+            best_valid = max(valid, key=lambda e: e.fitness_for_selection)
+            mean_valid_t_score = sum(e.t_score for e in valid) / len(valid)
+            mean_valid_selection = sum(e.fitness_for_selection for e in valid) / len(valid)
+            mean_valid_orth_tir = sum(e.orth_tir for e in valid) / len(valid)
+            mean_valid_wt_tir = sum(e.wt_tir for e in valid) / len(valid)
+            best_t_score = best_valid.t_score
+            best_selection = best_valid.fitness_for_selection
+            best_candidate_orth_tir = best_valid.orth_tir
+            best_candidate_wt_tir = best_valid.wt_tir
+            best_rbs_access = best_valid.rbs_access
+        else:
+            best_t_score = float("nan")
+            mean_valid_t_score = float("nan")
+            best_selection = best.fitness_for_selection
+            mean_valid_selection = float("nan")
+            best_candidate_orth_tir = float("nan")
+            mean_valid_orth_tir = float("nan")
+            best_candidate_wt_tir = float("nan")
+            mean_valid_wt_tir = float("nan")
+            best_rbs_access = float("nan")
 
         history.append({
             "generation": gen,
-            "best": best.fitness_for_selection,
-            "avg": avg_score,
-            "bestTIR": best.orth_tir,
-            "avgTIR": avg_tir,
-            "bestWT": best.wt_tir,
-            "bestRBSAccess": best.rbs_access,
+            "best_t_score": best_t_score,
+            "mean_valid_t_score": mean_valid_t_score,
+            "best_selection_score": best_selection,
+            "mean_valid_selection_score": mean_valid_selection,
+            "best_candidate_orth_tir": best_candidate_orth_tir,
+            "mean_valid_orth_tir": mean_valid_orth_tir,
+            "best_candidate_wt_tir": best_candidate_wt_tir,
+            "mean_valid_wt_tir": mean_valid_wt_tir,
+            "best_rbs_access": best_rbs_access,
+            "valid_candidates": len(valid),
+            "filtered_candidates": len(evals) - len(valid),
         })
 
-        # Select elites.
-        elite_count = max(4, int(population_size * elite_fraction))
+        elite_count = max(1, min(len(scored), max(4, int(population_size * elite_fraction))))
         elites = [ind for _ev, ind in scored[:elite_count]]
 
-        # Create next generation.
-        next_pop: List[Dict[str, str]] = []
-        # keep exact elites
+        next_pop: List[Dict[str, Any]] = []
         for i, e in enumerate(elites):
             kept = dict(e)
             kept["id"] = f"g{gen+1}_elite_{i}"
@@ -1118,39 +1295,50 @@ def run_ga(
             child = mutate_candidate(child, mutate_flank=True)
             child["id"] = f"g{gen+1}_child_{len(next_pop)}"
             next_pop.append(child)
-
         population = next_pop
 
     final_evals = list(all_evals_by_key.values())
     final_evals.sort(key=lambda e: e.fitness_for_selection, reverse=True)
 
-    # Normalize dashboard fitness 0-1 based on final eval range.
-    finite_scores = [e.fitness_for_selection for e in final_evals if not math.isinf(e.fitness_for_selection) and not math.isnan(e.fitness_for_selection)]
-    if finite_scores:
-        lo, hi = min(finite_scores), max(finite_scores)
-    else:
-        lo, hi = 0.0, 1.0
-
+    # Legacy dashboard-only normalized candidate fitness.  Valid scientific
+    # outputs use T-score / selection score and are exported separately.
+    finite_scores = [
+        e.fitness_for_selection for e in final_evals
+        if e.fitness_for_selection > -1e8
+        and not math.isinf(e.fitness_for_selection)
+        and not math.isnan(e.fitness_for_selection)
+    ]
+    lo, hi = (min(finite_scores), max(finite_scores)) if finite_scores else (0.0, 1.0)
     for e in final_evals:
-        if hi > lo:
+        if e.fitness_for_selection <= -1e8:
+            e.fitness = 0.0
+        elif hi > lo:
             e.fitness = round((e.fitness_for_selection - lo) / (hi - lo), 4)
         else:
             e.fitness = 1.0
 
-    # Normalize generation history best/avg for React-style 0-1 plot.
-    hist_scores = [h["best"] for h in history] + [h["avg"] for h in history]
-    hmin, hmax = min(hist_scores), max(hist_scores)
+    # Legacy history aliases retained without the old -1e9-contaminated average.
+    valid_hist_scores = [
+        v for h in history
+        for v in (h.get("best_selection_score"), h.get("mean_valid_selection_score"))
+        if isinstance(v, (int, float)) and not math.isnan(v) and not math.isinf(v)
+    ]
+    hmin, hmax = (min(valid_hist_scores), max(valid_hist_scores)) if valid_hist_scores else (0.0, 1.0)
     for h in history:
-        if hmax > hmin:
-            h["bestRaw"] = h["best"]
-            h["avgRaw"] = h["avg"]
-            h["best"] = round((h["best"] - hmin) / (hmax - hmin), 4)
-            h["avg"] = round((h["avg"] - hmin) / (hmax - hmin), 4)
-        else:
-            h["bestRaw"] = h["best"]
-            h["avgRaw"] = h["avg"]
-            h["best"] = 1.0
-            h["avg"] = 1.0
+        h["bestRaw"] = h.get("best_selection_score")
+        h["avgRaw"] = h.get("mean_valid_selection_score")
+        h["bestTScore"] = h.get("best_t_score")
+        h["avgValidTScore"] = h.get("mean_valid_t_score")
+        h["bestTIR"] = h.get("best_candidate_orth_tir")
+        h["avgTIR"] = h.get("mean_valid_orth_tir")
+        for source, target in (("best_selection_score", "best"), ("mean_valid_selection_score", "avg")):
+            val = h.get(source)
+            if not isinstance(val, (int, float)) or math.isnan(val) or math.isinf(val):
+                h[target] = float("nan")
+            elif hmax > hmin:
+                h[target] = round((val - hmin) / (hmax - hmin), 4)
+            else:
+                h[target] = 1.0
 
     return final_evals, history, all_binding_sites, population
 
@@ -1195,30 +1383,38 @@ def load_initial_candidates(path: Optional[str]) -> List[Dict[str, str]]:
 
 
 def candidate_to_dashboard_dict(e: CandidateEval) -> Dict[str, Any]:
-    """
-    Dashboard-compatible candidate object.
-    Keeps the old fields your React dashboard expects plus new thermodynamic fields.
-    """
+    """Compact dashboard representation; the workbook uses full CandidateEval rows."""
     return {
-        # Old dashboard fields
+        "candidateId": e.candidate_id,
+        "fivePrimeUTR": e.five_prime_utr,
+        "standby": e.standby,
+        "rbsLeft": e.rbs_left,
+        "rbsCore": e.rbs_core,
+        "rbsRight": e.rbs_right,
         "rbs": e.rbs,
         "spacer": e.spacer,
-        "orthScore": f"{e.orthScore:.3f}",
-        "wtLeakage": f"{e.wtLeakage:.3f}",
-        "rbsAccess": f"{e.rbs_access:.3f}",
-        "fitness": f"{e.fitness:.3f}",
-        "structure": e.structure,
-
-        # New thermodynamic fields
-        "candidateId": e.candidate_id,
-        "fivePrimeFlank": e.five_prime_flank,
+        "cdsStart": e.cds_start,
         "fullSeq": e.full_seq,
         "utrSeq": e.utr_seq,
         "augStart": e.aug_start,
-        "dGTotal": e.dG_total,
+        "structure": e.structure,
+        "rbsAccess": f"{e.rbs_access:.3f}",
+        "orthScore": f"{e.orthScore:.3f}",
+        "wtLeakage": f"{e.wtLeakage:.3f}",
+        "fitness": f"{e.fitness:.3f}",
         "dGDuplexOrth": e.dG_duplex_orth,
         "dGDuplexWT": e.dG_duplex_wt,
         "dGStart": e.dG_start,
+        "dGStandbyOrth": e.dG_standby_orth,
+        "dGStandbyWT": e.dG_standby_wt,
+        "dGSpacingOrth": e.best_dG_spacing_orth,
+        "dGmRNAUnfoldingOrth": e.best_dG_mrna_unfolding_orth,
+        "dGTotalOrth": e.dG_total_orth,
+        "dGSpacingWT": e.best_dG_spacing_wt,
+        "dGmRNAUnfoldingWT": e.best_dG_mrna_unfolding_wt,
+        "dGTotalWT": e.dG_total_wt,
+        # Legacy orthogonal aliases used by existing dashboard cards.
+        "dGTotal": e.dG_total,
         "dGStandby": e.dG_standby,
         "dGSpacing": e.best_dG_spacing,
         "dGmRNAUnfolding": e.best_dG_mrna_unfolding,
@@ -1238,34 +1434,20 @@ def build_dashboard_dataset(
 ) -> Dict[str, Any]:
     top = evals[:top_n]
     best_ids = {e.candidate_id for e in top[:5]}
-
-    # only include top candidate sites in JSON to avoid huge payload
-    site_payload = [
-        asdict(s) for s in binding_sites
-        if s.candidate_id in best_ids
-    ]
+    site_payload = [asdict(s) for s in binding_sites if s.candidate_id in best_ids]
 
     return {
         "inputs": {
             "orthogonalAntiSD": inputs.get("orthogonalAntiSD", DEFAULT_ORTH_ASD),
             "wtAntiSD": inputs.get("wtAntiSD", DEFAULT_WT_ASD),
+            "fivePrimeUTR": inputs.get("fivePrimeUTR", DEFAULT_FIVE_PRIME_UTR),
+            "standby": inputs.get("standby", DEFAULT_STANDBY),
             "cdsStart": inputs.get("cdsStart", DEFAULT_CDS_START),
             "targetExpression": inputs.get("targetExpression", "High"),
             "wtPenaltyConstant": inputs.get("wtPenaltyConstant", DEFAULT_WT_PENALTY_CONSTANT),
         },
         "candidates": [candidate_to_dashboard_dict(e) for e in top],
-        "fitnessData": [
-            {
-                "generation": h["generation"],
-                "best": h["best"],
-                "avg": h["avg"],
-                "bestRaw": h.get("bestRaw"),
-                "avgRaw": h.get("avgRaw"),
-                "bestTIR": h.get("bestTIR"),
-                "avgTIR": h.get("avgTIR"),
-            }
-            for h in history
-        ],
+        "fitnessData": [dict(h) for h in history],
         "scatterPoints": [
             {
                 "wtLeakage": max(1e-8, e.wt_tir),
@@ -1364,7 +1546,8 @@ def main() -> None:
         initial_candidates=initial_candidates,
         orth_anti_sd=args.orth_asd,
         wt_anti_sd=args.wt_asd,
-        default_flank=args.flank,
+        default_five_prime_utr=args.flank,
+        default_standby=DEFAULT_STANDBY,
         default_cds_start=args.cds_start,
         generations=args.generations,
         population_size=args.population,

@@ -1,101 +1,197 @@
 from __future__ import annotations
 """
-    Generates RBS candidates from a mRNA (json format).
-    @crakshay1
-"""
+Generate RBS candidates using one explicit candidate schema across the pipeline.
 
-
-"""
-Strategy
+Canonical candidate sequence order
 ─────────────────────────────────────────────────────────────────────────────
-Stop-codon filter 
+    five_prime_utr + standby
+    + rbs_left + rbs_core + rbs_right
+    + spacer + cds_start
+
+Mutation policy
 ─────────────────────────────────────────────────────────────────────────────
-Only FORWARD reading frames are checked, mRNA is single-stranded and
-only translated in the 5′→3′ direction. Three forward frames are checked
-in both the mutated spacer and in the junction window
-(RBS tail + spacer + CDS head). The CDS itself is excluded from checking
-because it naturally contains stop codons in off-frames.
+Mutable sequence attributes:
+    - standby
+    - rbs_left
+    - rbs_right
+    - spacer
 
-Mutation strategy
+Protected sequence attributes:
+    - five_prime_utr
+    - rbs_core
+    - cds_start
+
+There is no standby_start/index pointer. The standby sequence is a first-class
+candidate attribute, so every stage knows exactly what may and may not mutate.
+
+Stop-codon filter
 ─────────────────────────────────────────────────────────────────────────────
-Three mutable regions per candidate:
+Only FORWARD reading frames are checked. The spacer and RBS-tail/spacer junction
+must not contain UAA/UAG/UGA in any of the three forward frames. The CDS itself
+is excluded from this filter, matching the previous pipeline behavior.
 
-- five_prime_flank  (partial)
-    Positions 0 .. standby_start-1  → FROZEN
-    Positions standby_start .. end  → independently randomised per position
-    (each position: 50% chance of synonymous change, 50% kept)
-
-- Core motif inside the full RBS is ALWAYS intact, but the other parts of the RBS are mutated.
-
-- Spacer is freshly generated per candidate: random RNA of length drawn uniformly
-in [spacer_len_min, spacer_len_max]. Filtered so no triplet in any of
-the 3 forward reading frames is a stop codon.
-
-Parameters
-─────────────────────────────────────────────────────────────────────────────
-  --input  / -i    Input JSON
-  --output / -o    Output JSON path
-  --n              Number of candidates to generate per seed  (default: 100)
-  --standby-start  0-based index into five_prime_flank; positions BEFORE this
-                   are frozen  (default: 0 → entire flank is mutable)
-  --spacer-len     MIN MAX  tuple for random spacer length  (default: 4 - 7)
-  --max-tries      Internal retry cap per candidate (default: 10000)
-  --seed           RNG seed for reproducibility
-
-Input JSON format
+Canonical input/output candidate format
 ─────────────────────────────────────────────────────────────────────────────
 {
   "name": "seed_002",
-  "five_prime_flank": "UUUAAA",
-  "rbs": "AAGGUACAAGUCU",
-  "core": "UACAAG",
+  "five_prime_utr": "UUUAAA",
+  "standby": "AUAA",
+  "rbs_left": "AAGG",
+  "rbs_core": "UACAAG",
+  "rbs_right": "UCU",
+  "spacer": "AAUAAA",
   "cds_start": "AUGGCUACUAAAGAAAACGCU",
-  "mutable_regions": ["five_prime_flank", "rbs", "spacer"]
+  "mutable_regions": ["standby", "rbs_left", "rbs_right", "spacer"],
+  "protected_regions": ["five_prime_utr", "rbs_core", "cds_start"]
 }
 
-Output JSON format
-─────────────────────────────────────────────────────────────────────────────
-[
-  {
-    "name": "seed_002_c0001",
-    "five_prime_flank": "UUUCGA",
-    "rbs": "AAGGUACAAGUCU",
-    "spacer": "AAUAAA",
-    "cds_start": "AUGGCUACUAAAGAAAACGCU",
-    "mutable_regions": ["five_prime_flank", "rbs", "spacer"]
-  },
-  ...
-]
+Legacy seeds with five_prime_flank/rbs/core are still accepted as an input
+adapter, but new pipeline output always uses the canonical schema above.
 """
+
 import argparse
 import json
 import random
-import sys
 from pathlib import Path
 from typing import Any
 
 
-
-# Constants
-# ─────────────────────────────────────────────────────────────────────────────
-
 NUCLEOTIDES: tuple[str, ...] = ("A", "U", "G", "C")
-STOP_CODONS: frozenset[str]  = frozenset({"UAA", "UAG", "UGA"})
+STOP_CODONS: frozenset[str] = frozenset({"UAA", "UAG", "UGA"})
 
-# Sequence utilities
-# ─────────────────────────────────────────────────────────────────────────────
+MUTABLE_SEQUENCE_FIELDS: tuple[str, ...] = (
+    "standby",
+    "rbs_left",
+    "rbs_right",
+    "spacer",
+)
+PROTECTED_SEQUENCE_FIELDS: tuple[str, ...] = (
+    "five_prime_utr",
+    "rbs_core",
+    "cds_start",
+)
+CANONICAL_SEQUENCE_FIELDS: tuple[str, ...] = (
+    "five_prime_utr",
+    "standby",
+    "rbs_left",
+    "rbs_core",
+    "rbs_right",
+    "spacer",
+    "cds_start",
+)
+
 
 def normalise(seq: str) -> str:
-    """Uppercase + T→U."""
-    return seq.upper().replace("T", "U")
+    """Uppercase + T→U and keep only RNA bases."""
+    return "".join(ch for ch in (seq or "").upper().replace("T", "U") if ch in "AUGC")
+
+
+def split_rbs(full_rbs: str, core: str) -> tuple[str, str, str]:
+    """Split a full RBS into mutable-left / protected-core / mutable-right."""
+    full_rbs = normalise(full_rbs)
+    core = normalise(core)
+    if not core:
+        raise ValueError("RBS core cannot be empty.")
+    core_idx = full_rbs.find(core)
+    if core_idx == -1:
+        raise ValueError(f"Core '{core}' not found inside RBS '{full_rbs}'.")
+    return full_rbs[:core_idx], core, full_rbs[core_idx + len(core):]
+
+
+def assemble_five_prime(candidate: dict[str, Any]) -> str:
+    """Return the complete sequence upstream of the RBS."""
+    return normalise(candidate.get("five_prime_utr", "")) + normalise(candidate.get("standby", ""))
+
+
+def assemble_rbs(candidate: dict[str, Any]) -> str:
+    """Return the full RBS while keeping its protected core explicit in the schema."""
+    return (
+        normalise(candidate.get("rbs_left", ""))
+        + normalise(candidate.get("rbs_core", ""))
+        + normalise(candidate.get("rbs_right", ""))
+    )
+
+
+def assemble_full_sequence(candidate: dict[str, Any]) -> str:
+    return (
+        assemble_five_prime(candidate)
+        + assemble_rbs(candidate)
+        + normalise(candidate.get("spacer", ""))
+        + normalise(candidate.get("cds_start", ""))
+    )
+
+
+def normalise_candidate_schema(
+    candidate: dict[str, Any],
+    *,
+    default_five_prime_utr: str = "",
+    default_standby: str = "",
+    default_cds_start: str = "",
+    default_spacer_min: int = 4,
+    default_spacer_max: int = 7,
+) -> dict[str, Any]:
+    """Return one canonical candidate dictionary."""
+    src = dict(candidate or {})
+
+    five_prime_utr = normalise(src.get("five_prime_utr", src.get("five_prime_flank", default_five_prime_utr)))
+    standby = normalise(src.get("standby", default_standby))
+
+    has_split_rbs = any(k in src for k in ("rbs_left", "rbs_core", "rbs_right"))
+    if has_split_rbs:
+        rbs_left = normalise(src.get("rbs_left", ""))
+        rbs_core = normalise(src.get("rbs_core", src.get("core", "")))
+        rbs_right = normalise(src.get("rbs_right", ""))
+    else:
+        full_rbs = normalise(src.get("rbs", ""))
+        core = normalise(src.get("core", ""))
+        if core:
+            rbs_left, rbs_core, rbs_right = split_rbs(full_rbs, core)
+        else:
+            rbs_left, rbs_core, rbs_right = full_rbs, "", ""
+
+    spacer = normalise(src.get("spacer", ""))
+    cds_start = normalise(src.get("cds_start", default_cds_start))
+    if cds_start and not cds_start.startswith("AUG"):
+        cds_start = "AUG" + cds_start
+
+    requested_mutable = list(src.get("mutable_regions", MUTABLE_SEQUENCE_FIELDS))
+    expanded_mutable: list[str] = []
+    for field in requested_mutable:
+        if field == "rbs":  # legacy name
+            expanded_mutable.extend(["rbs_left", "rbs_right"])
+        elif field == "five_prime_flank":  # legacy field had no explicit standby
+            if standby:
+                expanded_mutable.append("standby")
+        else:
+            expanded_mutable.append(field)
+    mutable_regions = [x for x in MUTABLE_SEQUENCE_FIELDS if x in expanded_mutable]
+    if not mutable_regions and not requested_mutable:
+        mutable_regions = list(MUTABLE_SEQUENCE_FIELDS)
+
+    out: dict[str, Any] = {}
+    for key in ("name", "id", "source", "canonical_rbs", "sequence"):
+        if key in src:
+            out[key] = src[key]
+
+    out.update({
+        "five_prime_utr": five_prime_utr,
+        "standby": standby,
+        "rbs_left": rbs_left,
+        "rbs_core": rbs_core,
+        "rbs_right": rbs_right,
+        "spacer": spacer,
+        "cds_start": cds_start,
+        "mutable_regions": mutable_regions,
+        "protected_regions": list(PROTECTED_SEQUENCE_FIELDS),
+        "spacer_len_min": int(src.get("spacer_len_min", default_spacer_min)),
+        "spacer_len_max": int(src.get("spacer_len_max", default_spacer_max)),
+    })
+    return out
 
 
 def has_stop_fwd(seq: str) -> bool:
-    """
-        True if any triplet in any of the 3 FORWARD reading frames is a stop codon.
-        Reverse complement is intentionally NOT checked, mRNA is single-stranded
-        and only translated 5'→3'.
-    """
+    """True if any triplet in any of the 3 forward reading frames is a stop."""
+    seq = normalise(seq)
     for frame in range(3):
         for i in range(frame, len(seq) - 2, 3):
             if seq[i:i + 3] in STOP_CODONS:
@@ -103,25 +199,20 @@ def has_stop_fwd(seq: str) -> bool:
     return False
 
 
-def junction_has_stop(flank: str, rbs: str, spacer: str, cds_start: str, window: int = 15) -> bool:
-    """
-        Check the junction zone (end of RBS + spacer) for stop codons in all 3
-        forward frames. CDS is excluded, it naturally contains off-frame stops.
-    """
-    region = rbs[-window:] + spacer  
-    return has_stop_fwd(region)
+def junction_has_stop(rbs: str, spacer: str, window: int = 15) -> bool:
+    """Check the RBS-tail + spacer junction, preserving the previous filter."""
+    return has_stop_fwd(normalise(rbs)[-window:] + normalise(spacer))
 
 
-# Mutators
-# ─────────────────────────────────────────────────────────────────────────────
+def candidate_has_forbidden_stop(candidate: dict[str, Any]) -> bool:
+    spacer = normalise(candidate.get("spacer", ""))
+    return has_stop_fwd(spacer) or junction_has_stop(assemble_rbs(candidate), spacer)
+
 
 def _randomise_positions(seq: str) -> str:
-    """
-        Per-position independent randomisation:
-        each nucleotide has a 50% chance of being replaced by a different nt.
-    """
+    """Independently replace each position with 50% probability."""
     result = []
-    for nt in seq:
+    for nt in normalise(seq):
         if random.random() < 0.5:
             result.append(random.choice([n for n in NUCLEOTIDES if n != nt]))
         else:
@@ -129,32 +220,8 @@ def _randomise_positions(seq: str) -> str:
     return "".join(result)
 
 
-def mutate_flank(flank: str, standby_start: int) -> str:
-    """
-        Positions 0 .. standby_start-1  => FROZEN.
-        Positions standby_start .. end  => randomised.
-    """
-    return flank[:standby_start] + _randomise_positions(flank[standby_start:])
-
-
-def mutate_rbs_non_core(full_rbs: str, core: str) -> str | None:
-    """
-        Locate the core inside the full RBS and mutate everything around it.
-        Returns the mutated full RBS (core preserved), or None if core not found.
-    """
-    core_idx = full_rbs.find(core)
-    if core_idx == -1:
-        return None
-    prefix = _randomise_positions(full_rbs[:core_idx])
-    suffix = _randomise_positions(full_rbs[core_idx + len(core):])
-    return prefix + core + suffix
-
-
 def random_spacer(length: int, max_tries: int = 1000) -> str | None:
-    """
-        Generate a random RNA of `length` with no stop codon in any of the
-        3 forward reading frames. Returns None if max_tries is exhausted.
-    """
+    """Generate a random spacer with no forward-frame stop codon."""
     for _ in range(max_tries):
         seq = "".join(random.choice(NUCLEOTIDES) for _ in range(length))
         if not has_stop_fwd(seq):
@@ -162,103 +229,75 @@ def random_spacer(length: int, max_tries: int = 1000) -> str | None:
     return None
 
 
+def generate_candidates(
+    seed: dict[str, Any],
+    n: int,
+    spacer_len_min: int,
+    spacer_len_max: int,
+    max_tries: int,
+) -> list[dict[str, Any]]:
+    """Generate initial candidates using the same mutation regions used by the GA."""
+    base = normalise_candidate_schema(
+        seed,
+        default_spacer_min=spacer_len_min,
+        default_spacer_max=spacer_len_max,
+    )
+    name = str(base.get("name", "seed"))
+    mutable = set(base.get("mutable_regions", MUTABLE_SEQUENCE_FIELDS))
 
-# Per-seed generation
-# ─────────────────────────────────────────────────────────────────────────────
-
-def generate_candidates(seed: dict[str, Any], n: int, standby_start: int, spacer_len_min: int, spacer_len_max: int, max_tries: int) -> list[dict[str, Any]]:
-    """
-        Generates a list of candidates with the methods created above.
-    """
-    name = seed["name"]
-    flank = normalise(seed["five_prime_flank"])
-    rbs = normalise(seed["rbs"])
-    core = normalise(seed["core"])
-    cds_start = normalise(seed["cds_start"])
-    mutable = seed.get("mutable_regions", [])
-
-    # Validation 
-    if core not in rbs:
-        raise ValueError(
-            f"[{name}] Core '{core}' not found inside RBS '{rbs}'."
-        )
-    # Catch an unmutatable core
-    for frame in range(3):
-        for i in range(frame, len(core) - 2, 3):
-            if core[i:i+3] in STOP_CODONS:
-                raise ValueError(f"[{name}] Core '{core}' contains stop codon '{core[i:i+3]}': all candidates would be rejected.")
-    if standby_start > len(flank):
-        raise ValueError(f"[{name}] standby_start={standby_start} exceeds five_prime_flank length ({len(flank)}).")
+    if base["rbs_core"]:
+        for frame in range(3):
+            for i in range(frame, len(base["rbs_core"]) - 2, 3):
+                codon = base["rbs_core"][i:i + 3]
+                if codon in STOP_CODONS:
+                    raise ValueError(
+                        f"[{name}] Protected RBS core '{base['rbs_core']}' contains stop codon "
+                        f"'{codon}': all candidates would be rejected."
+                    )
 
     candidates: list[dict[str, Any]] = []
-    attempts   = 0
+    attempts = 0
 
     while len(candidates) < n and attempts < max_tries:
         attempts += 1
-        # five_prime_flank
-        new_flank = mutate_flank(flank, standby_start) if "five_prime_flank" in mutable else flank
+        new = dict(base)
 
-        # RBS non-core region
-        if "rbs" in mutable:
-            new_rbs = mutate_rbs_non_core(rbs, core)
-            if new_rbs is None:
-                continue
-        else:
-            new_rbs = rbs
+        for field in ("standby", "rbs_left", "rbs_right"):
+            if field in mutable:
+                new[field] = _randomise_positions(base[field])
 
-        # Spacer
         if "spacer" in mutable:
-            slen = random.randint(spacer_len_min, spacer_len_max)
+            slen = random.randint(int(spacer_len_min), int(spacer_len_max))
             new_spacer = random_spacer(slen)
             if new_spacer is None:
                 continue
-        else:
-            new_spacer = normalise(seed.get("spacer", ""))
+            new["spacer"] = new_spacer
 
-        # Junction stop-codon check
-        if junction_has_stop(new_flank, new_rbs, new_spacer, cds_start):
+        new["spacer_len_min"] = int(spacer_len_min)
+        new["spacer_len_max"] = int(spacer_len_max)
+
+        if candidate_has_forbidden_stop(new):
             continue
 
-        # Build record
-        candidates.append({
-            "name": f"{name}_c{len(candidates) + 1:04d}",
-            "five_prime_flank": new_flank,
-            "rbs": new_rbs,
-            "spacer": new_spacer,
-            "cds_start": cds_start,
-            "mutable_regions":  ["five_prime_flank", "rbs", "spacer"]
-        })
+        new["name"] = f"{name}_c{len(candidates) + 1:04d}"
+        candidates.append(new)
 
     return candidates
 
 
-
-# Main
-# ─────────────────────────────────────────────────────────────────────────────
-
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="RBS candidate generator, DalguardYES", 
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__,
+        description="Generate candidates with explicit mutable/protected sequence attributes."
     )
-    parser.add_argument("--input",  "-i", required=True,
-                        help="Input JSON (single seed or list).")
-    parser.add_argument("--output", "-o", required=True,
-                        help="Output JSON path.")
-    parser.add_argument("--n", type=int, default=100,
-                        help="Candidates per seed (default: 100).")
-    parser.add_argument("--standby-start", type=int, default=0, metavar="N",
-                        help="0-based index: positions before N in five_prime_flank "
-                             "are frozen (default: 0).")
-    parser.add_argument("--spacer-len", type=int, nargs=2, default=[4, 7],
-                        metavar=("MIN", "MAX"),
-                        help="Spacer length range (default: 4 7).")
-    parser.add_argument("--max-tries", type=int, default=10000,
-                        help="Max attempts per seed before giving up (default: 10000).")
-    parser.add_argument("--seed", type=int, default=None,
-                        help="RNG seed for reproducibility.")
-
+    parser.add_argument("--input", "-i", required=True, help="Input JSON (single seed or list).")
+    parser.add_argument("--output", "-o", required=True, help="Output JSON path.")
+    parser.add_argument("--n", type=int, default=100, help="Candidates per seed (default: 100).")
+    parser.add_argument(
+        "--spacer-len", type=int, nargs=2, default=[4, 7], metavar=("MIN", "MAX"),
+        help="Spacer length range (default: 4 7).",
+    )
+    parser.add_argument("--max-tries", type=int, default=10000)
+    parser.add_argument("--seed", type=int, default=None, help="RNG seed for reproducibility.")
     args = parser.parse_args()
 
     if args.seed is not None:
@@ -270,30 +309,29 @@ def main() -> None:
 
     with open(args.input) as fh:
         raw = json.load(fh)
-    seeds: list[dict] = raw if isinstance(raw, list) else [raw]
+    seeds: list[dict[str, Any]] = raw if isinstance(raw, list) else [raw]
 
     print(f"[INFO] {len(seeds)} seed(s) loaded.")
-
-    all_candidates: list[dict] = []
+    all_candidates: list[dict[str, Any]] = []
     for seed in seeds:
-        print(f"\n[INFO] Seed '{seed['name']}' → generating {args.n} candidates …")
+        seed_name = seed.get("name", "seed")
+        print(f"\n[INFO] Seed '{seed_name}' → generating {args.n} candidates …")
         cands = generate_candidates(
-            seed          = seed,
-            n             = args.n,
-            standby_start = args.standby_start,
-            spacer_len_min= sp_min,
-            spacer_len_max= sp_max,
-            max_tries     = args.max_tries,
+            seed=seed,
+            n=args.n,
+            spacer_len_min=sp_min,
+            spacer_len_max=sp_max,
+            max_tries=args.max_tries,
         )
         all_candidates.extend(cands)
         print(f"       └─ {len(cands)} candidate(s) OK.")
 
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
-    with open(out, "w") as fh:
+    with out.open("w") as fh:
         json.dump(all_candidates, fh, indent=2, ensure_ascii=False)
 
-    print(f"\n Done. {len(all_candidates)} total candidate(s) → '{out}'")
+    print(f"\nDone. {len(all_candidates)} total candidate(s) → '{out}'")
 
 
 if __name__ == "__main__":
