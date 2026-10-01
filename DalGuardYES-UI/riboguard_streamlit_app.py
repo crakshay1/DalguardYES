@@ -1177,59 +1177,37 @@ st.sidebar.caption("ORBS-duplex to candidates.py to GA/TIR optimizer")
 
 
 with st.sidebar.expander("Design inputs", expanded=True):
-
     orth_asd = st.text_input(
-
-        "Orthogonal anti-SD",
-
+        "Orthogonal anti-SD (5'→ 3')",
         value="ACTTGTATA",
-
-        help="This sequence is used as the ORBS input and as the orthogonal anti-SD.",
-
+        help="This sequence is used as the ORBS input and as the orthogonal anti-SD in the 5'→ 3' direction.",
     )
 
-    wt_asd = st.text_input("WT anti-SD", value="ACCTCCTTA")
-
+    wt_asd = st.text_input("Wild Type anti-SD (5'→ 3')", value="ACCTCCTTA")
     five_prime_utr = st.text_input(
-
         "5′ UTR (fixed)",
-
         value="GCGGAAUUCGAUAA",
-
         help="Protected upstream sequence. The GA never mutates this field.",
-
     )
 
     standby = st.text_input(
-
         "Standby sequence (mutable)",
-
         value="AAAA",
-
         help="Explicit standby region. This sequence may mutate during candidate generation and the GA.",
-
     )
 
     cds_start = st.text_input("CDS start", value="AUGGCUACUAAAGAAAACGCU")
-
     job_name = st.text_input("Design name", value="shine_dalguardyes_design")
 
 
 
 with st.sidebar.expander("ORBS-duplex settings", expanded=False):
-
     asd_tail_nt = st.number_input(
-
         "ASD tail nt to scan",
-
         min_value=4,
-
         max_value=50,
-
         value=12,
-
         step=1,
-
     )
 
 
