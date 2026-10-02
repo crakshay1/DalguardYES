@@ -1178,20 +1178,22 @@ st.sidebar.caption("ORBS-duplex to candidates.py to GA/TIR optimizer")
 
 with st.sidebar.expander("Design inputs", expanded=True):
     orth_asd = st.text_input(
-        "Orthogonal anti-SD (5'→ 3')",
+        "Orthogonal Anti-SD",
         value="ACTTGTATA",
         help="This sequence is used as the ORBS input and as the orthogonal anti-SD in the 5'→ 3' direction.",
     )
 
-    wt_asd = st.text_input("Wild Type anti-SD (5'→ 3')", value="ACCTCCTTA")
+    wt_asd = st.text_input("Wild-type Anti-SD ", 
+                           value="ACCTCCTTA",
+                           help="This sequence is used as the ORBS input and as the wild-type anti-SD in the 5'→ 3' direction.")
     five_prime_utr = st.text_input(
-        "5′ UTR (fixed)",
+        "5′ UTR",
         value="GCGGAAUUCGAUAA",
         help="Protected upstream sequence. The GA never mutates this field.",
     )
 
     standby = st.text_input(
-        "Standby sequence (mutable)",
+        "Standby sequence",
         value="AAAA",
         help="Explicit standby region. This sequence may mutate during candidate generation and the GA.",
     )
