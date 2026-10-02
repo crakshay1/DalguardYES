@@ -1008,6 +1008,25 @@ def _mutate_one_base(seq: str) -> str:
     chars[i] = random.choice([b for b in BASES if b != chars[i]])
     return "".join(chars)
 
+def _insert_one_base(seq: str) -> str:
+    if not seq:
+        return seq
+    chars = list(seq)
+    i = random.randrange(len(chars)+1)
+    if i == len(chars):
+        chars.append(random.choice(BASES))
+    else:
+        chars.insert(i, random.choice([b for b in BASES if b != chars[i]]))
+    return "".join(chars)
+
+def _delete_one_base(seq: str) -> str:
+    if not seq:
+        return seq
+    chars = list(seq)
+    i = random.randrange(len(chars))
+    del chars[i]
+    return "".join(chars)
+
 
 def mutate_candidate(candidate: Dict[str, Any], mutate_flank: bool = True) -> Dict[str, Any]:
     """Mutate only standby, non-core RBS segments, and spacer.
@@ -1022,10 +1041,22 @@ def mutate_candidate(candidate: Dict[str, Any], mutate_flank: bool = True) -> Di
     ops: List[str] = []
     if mutate_flank and "standby" in mutable and new["standby"]:
         ops.extend(["standby_sub", "standby_sub"])
+
     if ("rbs_left" in mutable or "rbs" in mutable) and new["rbs_left"]:
-        ops.extend(["rbs_left_sub", "rbs_left_sub"])
+        ops.extend([
+            "rbs_left_sub",
+            "rbs_left_sub",
+            "rbs_left_insert",
+            "rbs_left_delete"
+        ])
+
     if ("rbs_right" in mutable or "rbs" in mutable) and new["rbs_right"]:
-        ops.extend(["rbs_right_sub", "rbs_right_sub"])
+        ops.extend([
+            "rbs_right_sub",
+            "rbs_right_sub",
+            "rbs_right_insert",
+            "rbs_right_delete"
+        ])
     if "spacer" in mutable:
         ops.extend(["spacer_sub", "spacer_sub", "spacer_insert", "spacer_delete"])
 
@@ -1041,8 +1072,16 @@ def mutate_candidate(candidate: Dict[str, Any], mutate_flank: bool = True) -> Di
         new["standby"] = _mutate_one_base(new["standby"])
     elif op == "rbs_left_sub":
         new["rbs_left"] = _mutate_one_base(new["rbs_left"])
+    elif op == "rbs_left_insert":
+        new["rbs_left"] = _insert_one_base(new["rbs_left"])
+    elif op == "rbs_left_delete":
+        new["rbs_left"] = _delete_one_base(new["rbs_left"])
     elif op == "rbs_right_sub":
         new["rbs_right"] = _mutate_one_base(new["rbs_right"])
+    elif op == "rbs_right_insert":
+        new["rbs_right"] = _insert_one_base(new["rbs_right"])
+    elif op == "rbs_right_delete":
+        new["rbs_right"] = _delete_one_base(new["rbs_right"])
     elif op == "spacer_sub" and spacer:
         new["spacer"] = _mutate_one_base(spacer)
     elif op == "spacer_insert" and len(spacer) < spacer_max:
